@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AI Exam Question Generator</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&family=DM+Mono&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+ 
+  :root {
+    --bg: #f5f4f0;
+    --surface: #ffffff;
+    --surface2: #f0ede8;
+    --border: #e0ddd8;
+    --border2: #ccc9c3;
+    --text: #1a1916;
+    --text2: #6b6860;
+    --text3: #9b9890;
+    --accent: #2a52a0;
+    --accent-bg: #eef2fb;
+    --accent-text: #1a3a7a;
+    --success: #166534;
+    --success-bg: #dcfce7;
+    --warn: #92400e;
+    --warn-bg: #fef3c7;
+    --danger: #991b1b;
+    --danger-bg: #fee2e2;
+    --info: #1e40af;
+    --info-bg: #dbeafe;
+    --radius: 10px;
+    --radius-lg: 14px;
+    --shadow: 0 1px 4px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.05);
+  }
+ 
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+ 
+  /* HEADER */
+  .site-header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 1px 8px rgba(0,0,0,0.06);
+  }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: var(--text);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .logo-text {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.2rem;
+    color: var(--text);
+  }
+  .header-badge {
+    background: var(--accent-bg);
+    color: var(--accent-text);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+ 
+  /* MAIN */
+  .main {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+ 
+  .hero { text-align: center; margin-bottom: 2.5rem; }
+  .hero h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(2rem, 5vw, 2.8rem);
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.15;
+    letter-spacing: -1px;
+    margin-bottom: 10px;
+  }
+  .hero h1 span { color: var(--accent); }
+  .hero p { font-size: 15px; color: var(--text2); max-width: 520px; margin: 0 auto; line-height: 1.6; }
+ 
+  /* CARDS */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.75rem;
+    margin-bottom: 1.25rem;
+    box-shadow: var(--shadow);
+  }
+  .card-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+ 
+  /* DROP ZONE */
+  .drop-zone {
+    border: 2px dashed var(--border2);
+    border-radius: var(--radius);
+    padding: 3rem 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--surface2);
+  }
+  .drop-zone:hover { border-color: var(--accent); background: var(--accent-bg); }
+  .drop-zone.dragover { border-color: var(--accent); background: var(--accent-bg); transform: scale(1.01); }
+  .drop-icon { font-size: 2.8rem; margin-bottom: 12px; display: block; }
+  .drop-zone h3 { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+  .drop-zone p { font-size: 13px; color: var(--text2); }
+  .browse-link { color: var(--accent); font-weight: 600; text-decoration: underline; cursor: pointer; }
+  #file-input { display: none; }
+ 
+  .file-pill {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--success-bg);
+    border: 1px solid #bbf7d0;
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    margin-top: 14px;
+    font-size: 13px; color: var(--success); font-weight: 500;
+  }
+  .file-pill .remove-btn {
+    margin-left: auto; background: none; border: none;
+    cursor: pointer; color: var(--success); font-size: 16px; opacity: 0.6;
+    transition: opacity 0.15s;
+  }
+  .file-pill .remove-btn:hover { opacity: 1; }
+ 
+  .text-snip {
+    margin-top: 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px; color: var(--text2);
+    max-height: 72px; overflow: hidden;
+    position: relative; line-height: 1.6;
+  }
+  .text-snip::after {
+    content: ''; position: absolute;
+    bottom: 0; left: 0; right: 0; height: 28px;
+    background: linear-gradient(transparent, var(--surface2));
+  }
+ 
+  /* QUESTION TYPES */
+  .type-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1.25rem; }
+  .type-btn {
+    border: 1.5px solid var(--border);
+    background: var(--surface2);
+    border-radius: var(--radius);
+    padding: 14px 8px; text-align: center;
+    cursor: pointer; transition: all 0.15s; user-select: none; position: relative;
+  }
+  .type-btn:hover { border-color: var(--accent); background: var(--accent-bg); }
+  .type-btn.active { border-color: var(--accent); background: var(--accent-bg); }
+  .type-btn.active::after {
+    content: '✓'; position: absolute; top: 6px; right: 8px;
+    font-size: 11px; font-weight: 700; color: var(--accent);
+  }
+  .type-btn .t-icon { font-size: 1.6rem; display: block; margin-bottom: 5px; }
+  .type-btn .t-name { font-size: 13px; font-weight: 600; color: var(--text); display: block; }
+  .type-btn .t-sub { font-size: 10px; color: var(--text2); margin-top: 2px; display: block; }
+ 
+  /* SLIDER */
+  .slider-row {
+    display: flex; align-items: center; gap: 14px;
+    margin-bottom: 1.5rem;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px;
+  }
+  .slider-row label { font-size: 13px; color: var(--text2); white-space: nowrap; font-weight: 500; }
+  .slider-row input[type=range] {
+    flex: 1; -webkit-appearance: none;
+    height: 4px; background: var(--border2); border-radius: 4px; outline: none;
+  }
+  .slider-row input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 18px; height: 18px;
+    background: var(--text); border-radius: 50%; cursor: pointer; transition: transform 0.15s;
+  }
+  .slider-row input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+  .count-display {
+    font-size: 18px; font-weight: 600; color: var(--text);
+    min-width: 30px; text-align: center;
+    font-family: 'Playfair Display', serif;
+  }
+ 
+  /* GENERATE BUTTON */
+  .gen-btn {
+    width: 100%; padding: 16px;
+    background: var(--text); color: #fff;
+    border: none; border-radius: var(--radius);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px; font-weight: 600;
+    cursor: pointer; letter-spacing: 0.2px;
+    transition: opacity 0.2s, transform 0.1s;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+  }
+  .gen-btn:hover:not(:disabled) { opacity: 0.85; }
+  .gen-btn:active:not(:disabled) { transform: scale(0.99); }
+  .gen-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-arrow { font-size: 18px; transition: transform 0.2s; }
+  .gen-btn:hover:not(:disabled) .btn-arrow { transform: translateX(4px); }
+ 
+  /* LOADING */
+  .loading-card { text-align: center; padding: 3rem 1.5rem; }
+  .loader-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .loader-ring {
+    width: 48px; height: 48px;
+    border: 3px solid var(--border2);
+    border-top-color: var(--text);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loader-msg { font-size: 14px; color: var(--text2); font-weight: 500; min-height: 22px; }
+  .loader-steps { display: flex; gap: 8px; }
+  .step-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border2); transition: background 0.3s; }
+  .step-dot.active { background: var(--text); }
+ 
+  /* RESULTS */
+  .results-header {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 10px; margin-bottom: 1.25rem;
+  }
+  .results-title { font-family: 'Playfair Display', serif; font-size: 1.4rem; font-weight: 700; color: var(--text); }
+  .dl-row { display: flex; gap: 8px; }
+  .dl-btn {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; font-family: 'DM Sans', sans-serif; font-weight: 600;
+    padding: 8px 16px; border: 1.5px solid var(--border2);
+    border-radius: 8px; background: var(--surface); color: var(--text2);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .dl-btn:hover { background: var(--text); color: #fff; border-color: var(--text); }
+ 
+  /* STATS */
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1.5rem; }
+  .stat { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; text-align: center; }
+  .stat-n { font-size: 26px; font-weight: 700; color: var(--text); font-family: 'Playfair Display', serif; }
+  .stat-l { font-size: 11px; color: var(--text3); margin-top: 2px; font-weight: 500; }
+ 
+  /* FILTER TABS */
+  .filter-tabs { display: flex; gap: 6px; margin-bottom: 1.25rem; flex-wrap: wrap; }
+  .ftab {
+    padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 600;
+    cursor: pointer; border: 1.5px solid var(--border2); background: var(--surface); color: var(--text2);
+    transition: all 0.15s;
+  }
+  .ftab:hover, .ftab.on { background: var(--text); color: #fff; border-color: var(--text); }
+ 
+  /* QUESTION SECTIONS */
+  .q-section { margin-bottom: 1.75rem; }
+  .q-section-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .q-section-head h3 { font-size: 13px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.8px; }
+  .q-section-head .line { flex: 1; height: 1px; background: var(--border); }
+  .q-count-badge {
+    font-size: 11px; font-weight: 600; padding: 2px 9px;
+    border-radius: 20px; background: var(--surface2); color: var(--text2); border: 1px solid var(--border);
+  }
+ 
+  .q-item {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px 18px; margin-bottom: 10px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .q-item:hover { border-color: var(--border2); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+ 
+  .q-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .q-num-badge {
+    font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500;
+    color: var(--text3); background: var(--surface2); border: 1px solid var(--border);
+    padding: 2px 8px; border-radius: 5px;
+  }
+  .mark-pill { font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 20px; margin-left: auto; }
+  .pill-mcq { background: var(--info-bg); color: var(--info); }
+  .pill-2   { background: var(--success-bg); color: var(--success); }
+  .pill-3   { background: var(--warn-bg); color: var(--warn); }
+  .pill-5   { background: var(--danger-bg); color: var(--danger); }
+ 
+  .q-text { font-size: 14px; color: var(--text); line-height: 1.65; font-weight: 500; }
+ 
+  .mcq-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .mcq-opt {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 12px;
+    font-size: 13px; color: var(--text2); display: flex; gap: 8px;
+  }
+  .opt-label { font-weight: 700; color: var(--text); min-width: 16px; }
+ 
+  /* ERROR */
+  .err-box {
+    background: var(--danger-bg); border: 1px solid #fca5a5;
+    border-radius: var(--radius); padding: 12px 16px;
+    font-size: 13px; color: var(--danger); font-weight: 500;
+    margin-top: 12px;
+  }
+ 
+  /* FOOTER */
+  .site-footer {
+    text-align: center; padding: 2rem;
+    font-size: 12px; color: var(--text3);
+    border-top: 1px solid var(--border); margin-top: 2rem;
+  }
+ 
+  /* RESPONSIVE */
+  @media (max-width: 640px) {
+    .type-grid  { grid-template-columns: repeat(2, 1fr); }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .mcq-grid   { grid-template-columns: 1fr; }
+    .main       { padding: 1.5rem 1rem 3rem; }
+    .dl-row     { flex-wrap: wrap; }
+  }
+ 
+  .hidden { display: none !important; }
+  .fade-in { animation: fadeIn 0.4s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+ 
+<header class="site-header">
+  <div class="logo">
+    <div class="logo-icon">📝</div>
+    <span class="logo-text">ExamForge AI</span>
+  </div>
+  <span class="header-badge">AI Powered</span>
+</header>
+ 
+<main class="main">
+ 
+  <div class="hero">
+    <h1>Generate <span>Exam Questions</span><br>from Any PDF</h1>
+    <p>Upload your study material and get structured MCQs, short-answer, and essay questions — instantly.</p>
+  </div>
+ 
+  <!-- UPLOAD -->
+  <div class="card" id="upload-card">
+    <div class="card-title">Step 1 — Upload PDF</div>
+    <div class="drop-zone" id="drop-zone"
+         onclick="document.getElementById('file-input').click()"
+         ondragover="onDragOver(event)"
+         ondragleave="onDragLeave()"
+         ondrop="onDrop(event)">
+      <span class="drop-icon">📄</span>
+      <h3>Drag &amp; drop your PDF here</h3>
+      <p>or <span class="browse-link">click to browse</span></p>
+      <p style="margin-top:6px;font-size:11px;color:var(--text3);">Text-based PDFs only · up to 20 pages extracted</p>
+    </div>
+    <input type="file" id="file-input" accept=".pdf" onchange="handleFileInput(event)" />
+    <div id="file-pill" class="file-pill hidden">
+      <span>✅</span>
+      <span id="file-name-display"></span>
+      <span id="file-meta-display" style="font-weight:400;opacity:0.7;margin-left:4px;"></span>
+      <button class="remove-btn" onclick="removeFile()">✕</button>
+    </div>
+    <div id="upload-err" class="err-box hidden"></div>
+  </div>
+ 
+  <!-- OPTIONS -->
+  <div class="card">
+    <div class="card-title">Step 2 — Configure Questions</div>
+    <div class="type-grid">
+      <div class="type-btn active" data-type="mcq" onclick="toggleType(this)">
+        <span class="t-icon">🔘</span>
+        <span class="t-name">MCQ</span>
+        <span class="t-sub">4 options A–D</span>
+      </div>
+      <div class="type-btn active" data-type="2mark" onclick="toggleType(this)">
+        <span class="t-icon">✏️</span>
+        <span class="t-name">2 Marks</span>
+        <span class="t-sub">Short answer</span>
+      </div>
+      <div class="type-btn active" data-type="3mark" onclick="toggleType(this)">
+        <span class="t-icon">📝</span>
+        <span class="t-name">3 Marks</span>
+        <span class="t-sub">Medium answer</span>
+      </div>
+      <div class="type-btn active" data-type="5mark" onclick="toggleType(this)">
+        <span class="t-icon">📃</span>
+        <span class="t-name">5 Marks</span>
+        <span class="t-sub">Long answer</span>
+      </div>
+    </div>
+    <div class="slider-row">
+      <label>Questions per type:</label>
+      <input type="range" id="q-count" min="3" max="10" value="5" step="1"
+             oninput="document.getElementById('count-disp').textContent=this.value" />
+      <span class="count-display" id="count-disp">5</span>
+    </div>
+    <button class="gen-btn" id="gen-btn" onclick="generate()" disabled>
+      Generate Questions <span class="btn-arrow">→</span>
+    </button>
+  </div>
+ 
+  <!-- LOADING -->
+  <div class="card loading-card hidden" id="loading-card">
+    <div class="loader-wrap">
+      <div class="loader-ring"></div>
+      <div class="loader-msg" id="loader-msg">Reading PDF content...</div>
+      <div class="loader-steps">
+        <div class="step-dot active"></div>
+        <div class="step-dot"></div>
+        <div class="step-dot"></div>
+        <div class="step-dot"></div>
+      </div>
+    </div>
+  </div>
+ 
+  <!-- RESULTS -->
+  <div id="results-section" class="hidden">
+    <div class="card">
+      <div class="results-header">
+        <div class="results-title" id="results-title">Generated Questions</div>
+        <div class="dl-row">
+          <button class="dl-btn" onclick="dlTXT()">⬇ TXT</button>
+          <button class="dl-btn" onclick="dlPDF()">⬇ PDF</button>
+          <button class="dl-btn" onclick="regenerate()">↺ Regenerate</button>
+        </div>
+      </div>
+      <div class="stats-grid" id="stats-grid"></div>
+      <div class="filter-tabs" id="filter-tabs"></div>
+      <div id="questions-out"></div>
+    </div>
+  </div>
+ 
+</main>
+ 
+<footer class="site-footer">
+  ExamForge AI · Powered by Claude AI · Questions generated from your PDF content
+</footer>
+ 
+<script>
+let selectedFile = null;
+let generatedData = null;
+let activeTypes = new Set(['mcq','2mark','3mark','5mark']);
+let activeFilter = 'all';
+ 
+/* --- DRAG & DROP --- */
+function onDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('dragover'); }
+function onDragLeave() { document.getElementById('drop-zone').classList.remove('dragover'); }
+function onDrop(e) {
+  e.preventDefault(); onDragLeave();
+  const f = e.dataTransfer.files[0];
+  if (f && f.type === 'application/pdf') setFile(f);
+  else showErr('Please drop a valid PDF file.');
+}
+function handleFileInput(e) { if (e.target.files[0]) setFile(e.target.files[0]); }
+ 
+function setFile(file) {
+  selectedFile = file;
+  hideErr();
+  document.getElementById('file-name-display').textContent = file.name;
+  document.getElementById('file-meta-display').textContent = '· ' + (file.size / 1024).toFixed(0) + ' KB';
+  document.getElementById('file-pill').classList.remove('hidden');
+  document.getElementById('gen-btn').disabled = false;
+}
+ 
+function removeFile() {
+  selectedFile = null;
+  document.getElementById('file-pill').classList.add('hidden');
+  document.getElementById('upload-err').classList.add('hidden');
+  document.getElementById('file-input').value = '';
+  document.getElementById('gen-btn').disabled = true;
+  document.getElementById('results-section').classList.add('hidden');
+}
+ 
+/* --- TOGGLE TYPES --- */
+function toggleType(btn) {
+  const t = btn.dataset.type;
+  if (activeTypes.has(t)) {
+    if (activeTypes.size === 1) return;
+    activeTypes.delete(t); btn.classList.remove('active');
+  } else {
+    activeTypes.add(t); btn.classList.add('active');
+  }
+}
+ 
+/* --- LOADER --- */
+const MSGS = ['Reading PDF content…','Identifying key concepts…','Crafting exam questions…','Formatting your question paper…'];
+let loadInterval, stepIdx = 0;
+ 
+function startLoader() {
+  stepIdx = 0;
+  const dots = document.querySelectorAll('.step-dot');
+  dots.forEach(d => d.classList.remove('active'));
+  dots[0].classList.add('active');
+  document.getElementById('loader-msg').textContent = MSGS[0];
+  document.getElementById('loading-card').classList.remove('hidden');
+  loadInterval = setInterval(() => {
+    stepIdx = (stepIdx + 1) % MSGS.length;
+    document.getElementById('loader-msg').textContent = MSGS[stepIdx];
+    dots.forEach((d, i) => d.classList.toggle('active', i === stepIdx));
+  }, 2200);
+}
+function stopLoader() {
+  clearInterval(loadInterval);
+  document.getElementById('loading-card').classList.add('hidden');
+}
+ 
+/* --- GENERATE ---
+   Sends multipart/form-data to Flask POST /generate
+   matching: request.files["pdf"], request.form["types"], request.form["count"]
+*/
+async function generate() {
+  if (!selectedFile) return;
+ 
+  const count = document.getElementById('q-count').value;
+  const types = [...activeTypes];
+ 
+  document.getElementById('results-section').classList.add('hidden');
+  startLoader();
+  document.getElementById('gen-btn').disabled = true;
+  hideErr();
+ 
+  // Build FormData — matches Flask's request.files and request.form
+  const fd = new FormData();
+  fd.append('pdf', selectedFile);
+  fd.append('count', count);
+  types.forEach(t => fd.append('types', t));
+ 
+  try {
+    const res = await fetch('/generate', {
+      method: 'POST',
+      body: fd   // NO Content-Type header — browser sets multipart boundary automatically
+    });
+ 
+    const data = await res.json();
+ 
+    if (!res.ok || data.error) {
+      throw new Error(data.error || 'Server error');
+    }
+ 
+    generatedData = data.data;
+    stopLoader();
+    renderResults(generatedData);
+ 
+  } catch (err) {
+    stopLoader();
+    showErr('⚠ Generation failed: ' + err.message + '. Please try again.');
+  } finally {
+    document.getElementById('gen-btn').disabled = false;
+  }
+}
+ 
+function regenerate() {
+  document.getElementById('results-section').classList.add('hidden');
+  generate();
+}
+ 
+/* --- RENDER --- */
+function renderResults(d) {
+  const mcqs  = d.mcq        || [];
+  const two   = d.two_mark   || [];
+  const three = d.three_mark || [];
+  const five  = d.five_mark  || [];
+  const total = mcqs.length + two.length + three.length + five.length;
+ 
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="stat"><div class="stat-n">${total}</div><div class="stat-l">Total questions</div></div>
+    <div class="stat"><div class="stat-n">${mcqs.length}</div><div class="stat-l">MCQ</div></div>
+    <div class="stat"><div class="stat-n">${two.length + three.length}</div><div class="stat-l">Short / Medium</div></div>
+    <div class="stat"><div class="stat-n">${five.length}</div><div class="stat-l">Long answer</div></div>
+  `;
+ 
+  const tabs = [['all', `All (${total})`]];
+  if (mcqs.length)  tabs.push(['mcq',   `MCQ (${mcqs.length})`]);
+  if (two.length)   tabs.push(['2mark', `2-Mark (${two.length})`]);
+  if (three.length) tabs.push(['3mark', `3-Mark (${three.length})`]);
+  if (five.length)  tabs.push(['5mark', `5-Mark (${five.length})`]);
+  document.getElementById('filter-tabs').innerHTML =
+    tabs.map(([k, l]) => `<div class="ftab ${k==='all'?'on':''}" onclick="filterBy('${k}',this)">${l}</div>`).join('');
+ 
+  activeFilter = 'all';
+  renderQuestions(d);
+ 
+  document.getElementById('results-title').textContent = `Generated Questions (${total})`;
+  const sec = document.getElementById('results-section');
+  sec.classList.remove('hidden');
+  sec.classList.add('fade-in');
+  sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+ 
+function filterBy(key, tab) {
+  activeFilter = key;
+  document.querySelectorAll('.ftab').forEach(t => t.classList.remove('on'));
+  tab.classList.add('on');
+  renderQuestions(generatedData);
+}
+ 
+function renderQuestions(d) {
+  const mcqs  = d.mcq        || [];
+  const two   = d.two_mark   || [];
+  const three = d.three_mark || [];
+  const five  = d.five_mark  || [];
+  let html = '';
+  const show = k => activeFilter === 'all' || activeFilter === k;
+ 
+  if (show('mcq') && mcqs.length) {
+    html += sec('Multiple Choice Questions', mcqs.length, mcqs.map((q, i) => `
+      <div class="q-item">
+        <div class="q-meta"><span class="q-num-badge">MCQ · Q${i+1}</span><span class="mark-pill pill-mcq">MCQ</span></div>
+        <div class="q-text">${x(q.q)}</div>
+        <div class="mcq-grid">
+          ${['a','b','c','d'].map((o,li)=>`<div class="mcq-opt"><span class="opt-label">${'ABCD'[li]}.</span><span>${x(q[o])}</span></div>`).join('')}
+        </div>
+      </div>`).join(''));
+  }
+  if (show('2mark') && two.length) {
+    html += sec('2-Mark Questions', two.length, two.map((q,i)=>`
+      <div class="q-item">
+        <div class="q-meta"><span class="q-num-badge">2-Mark · Q${i+1}</span><span class="mark-pill pill-2">2 Marks</span></div>
+        <div class="q-text">${x(q.q)}</div>
+      </div>`).join(''));
+  }
+  if (show('3mark') && three.length) {
+    html += sec('3-Mark Questions', three.length, three.map((q,i)=>`
+      <div class="q-item">
+        <div class="q-meta"><span class="q-num-badge">3-Mark · Q${i+1}</span><span class="mark-pill pill-3">3 Marks</span></div>
+        <div class="q-text">${x(q.q)}</div>
+      </div>`).join(''));
+  }
+  if (show('5mark') && five.length) {
+    html += sec('5-Mark Questions', five.length, five.map((q,i)=>`
+      <div class="q-item">
+        <div class="q-meta"><span class="q-num-badge">5-Mark · Q${i+1}</span><span class="mark-pill pill-5">5 Marks</span></div>
+        <div class="q-text">${x(q.q)}</div>
+      </div>`).join(''));
+  }
+  document.getElementById('questions-out').innerHTML = html ||
+    '<p style="color:var(--text2);text-align:center;padding:2rem;">No questions match the selected filter.</p>';
+}
+ 
+function sec(title, count, inner) {
+  return `<div class="q-section">
+    <div class="q-section-head">
+      <h3>${title}</h3><span class="q-count-badge">${count} questions</span><div class="line"></div>
+    </div>${inner}</div>`;
+}
+ 
+/* --- DOWNLOAD — calls Flask /download/txt and /download/pdf --- */
+async function dlTXT() {
+  if (!generatedData) return;
+  const res = await fetch('/download/txt', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: generatedData })
+  });
+  const blob = await res.blob();
+  dl(blob, 'exam_questions.txt');
+}
+ 
+async function dlPDF() {
+  if (!generatedData) return;
+  const res = await fetch('/download/pdf', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: generatedData })
+  });
+  const blob = await res.blob();
+  dl(blob, 'exam_questions.pdf');
+}
+ 
+function dl(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+ 
+/* --- UTILS --- */
+function x(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function showErr(msg) {
+  const el = document.getElementById('upload-err');
+  el.textContent = msg; el.classList.remove('hidden');
+}
+function hideErr() { document.getElementById('upload-err').classList.add('hidden'); }
+</script>
+</body>
+</html>
