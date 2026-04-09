@@ -1,7 +1,6 @@
 import json
-import os                        # ✅ move here
+import os
 import pdfplumber
-from dotenv import load_dotenv   # ✅ move here
 from flask import Flask, render_template, request, jsonify, send_file
 from groq import Groq
 from reportlab.lib.pagesizes import A4
@@ -9,11 +8,10 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 import io
-
-load_dotenv()                    # ✅ before app and client
+ 
 app = Flask(__name__)
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
-
+ 
 def extract_text_from_pdf(file_stream):
     text = ""
     with pdfplumber.open(file_stream) as pdf:
@@ -22,20 +20,20 @@ def extract_text_from_pdf(file_stream):
             if page_text:
                 text += page_text + "\n"
     return text.strip()
-
+ 
 def generate_questions(text, types, count):
     types_desc = []
     if "mcq"   in types: types_desc.append(f"{count} MCQ questions with exactly 4 options A, B, C, D (one correct)")
     if "2mark" in types: types_desc.append(f"{count} 2-mark short answer questions (define/state type)")
     if "3mark" in types: types_desc.append(f"{count} 3-mark medium answer questions (explain/describe type)")
     if "5mark" in types: types_desc.append(f"{count} 5-mark long answer/essay questions (analytical/comparison type)")
-
+ 
     prompt = f"""You are an expert university exam question paper setter.
 Study the PDF text below and generate high-quality, meaningful exam questions.
-
+ 
 GENERATE EXACTLY:
 {chr(10).join(types_desc)}
-
+ 
 STRICT RULES:
 - Every question must be specific and directly based on the PDF content
 - No vague, trivial, or generic questions
@@ -43,15 +41,15 @@ STRICT RULES:
 - 2-mark: short factual recall (define / state)
 - 3-mark: explanation or description
 - 5-mark: analysis, comparison, or extended response
-
+ 
 Return ONLY valid compact JSON — no markdown, no code fences, no extra text:
 {{"mcq":[{{"q":"...","a":"...","b":"...","c":"...","d":"...","ans":"A"}}],"two_mark":[{{"q":"..."}}],"three_mark":[{{"q":"..."}}],"five_mark":[{{"q":"..."}}]}}
-
+ 
 If a type was NOT requested, return an empty array [] for that key.
-
+ 
 PDF TEXT:
 {text[:6000]}"""
-
+ 
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         max_tokens=4000,
@@ -60,11 +58,11 @@ PDF TEXT:
     raw   = response.choices[0].message.content
     clean = raw.replace("```json", "").replace("```", "").strip()
     return json.loads(clean)
-
+ 
 @app.route("/")
 def index():
     return render_template("index.html")
-
+ 
 @app.route("/generate", methods=["POST"])
 def generate():
     if "pdf" not in request.files:
@@ -86,7 +84,7 @@ def generate():
         return jsonify({"error": "AI returned invalid JSON. Please try again."}), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
+ 
 @app.route("/download/txt", methods=["POST"])
 def download_txt():
     data = request.json.get("data", {})
@@ -117,7 +115,7 @@ def download_txt():
     buf = io.BytesIO("\n".join(lines).encode("utf-8"))
     buf.seek(0)
     return send_file(buf, mimetype="text/plain", as_attachment=True, download_name="exam_questions.txt")
-
+ 
 @app.route("/download/pdf", methods=["POST"])
 def download_pdf():
     data = request.json.get("data", {})
@@ -145,6 +143,6 @@ def download_pdf():
     doc.build(story)
     buf.seek(0)
     return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name="exam_questions.pdf")
-
+ 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
