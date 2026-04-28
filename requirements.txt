@@ -1,6 +1,5 @@
-flask==3.0.0
-groq
-pdfplumber==0.10.3
-reportlab==4.1.0
-python-dotenv==1.0.0
+flask
 gunicorn
+groq
+pdfplumber
+reportlab
