@@ -8,11 +8,36 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 import io
- 
+
+# ---------------- APP INIT ----------------
 app = Flask(__name__)
-client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
-print("DEBUG GROQ KEY:", os.environ.get("GROQ_API_KEY"))
- 
+
+# Safe API key load
+GROQ_KEY = os.environ.get("GROQ_API_KEY")
+
+if not GROQ_KEY:
+    print("❌ GROQ_API_KEY NOT FOUND")
+else:
+    print("✅ GROQ KEY LOADED")
+
+client = Groq(api_key=GROQ_KEY)
+
+# ---------------- HEALTH CHECK (IMPORTANT) ----------------
+@app.route("/health")
+def health():
+    return "OK", 200
+
+# ---------------- HOME ROUTE (SAFE VERSION) ----------------
+@app.route("/")
+def index():
+    try:
+        return render_template("index.html")
+    except Exception as e:
+        print("Template error:", e)
+        return "Server is running", 200
+
+
+# ---------------- PDF TEXT EXTRACTION ----------------
 def extract_text_from_pdf(file_stream):
     text = ""
     with pdfplumber.open(file_stream) as pdf:
@@ -21,130 +46,125 @@ def extract_text_from_pdf(file_stream):
             if page_text:
                 text += page_text + "\n"
     return text.strip()
- 
+
+
+# ---------------- QUESTION GENERATION ----------------
 def generate_questions(text, types, count):
     types_desc = []
-    if "mcq"   in types: types_desc.append(f"{count} MCQ questions with exactly 4 options A, B, C, D (one correct)")
-    if "2mark" in types: types_desc.append(f"{count} 2-mark short answer questions (define/state type)")
-    if "3mark" in types: types_desc.append(f"{count} 3-mark medium answer questions (explain/describe type)")
-    if "5mark" in types: types_desc.append(f"{count} 5-mark long answer/essay questions (analytical/comparison type)")
- 
-    prompt = f"""You are an expert university exam question paper setter.
-Study the PDF text below and generate high-quality, meaningful exam questions.
- 
-GENERATE EXACTLY:
+
+    if "mcq" in types:
+        types_desc.append(f"{count} MCQ questions with 4 options A B C D (one correct)")
+    if "2mark" in types:
+        types_desc.append(f"{count} 2-mark short questions")
+    if "3mark" in types:
+        types_desc.append(f"{count} 3-mark questions")
+    if "5mark" in types:
+        types_desc.append(f"{count} 5-mark long questions")
+
+    prompt = f"""
+Generate exam questions based ONLY on the text.
+
+GENERATE:
 {chr(10).join(types_desc)}
- 
-STRICT RULES:
-- Every question must be specific and directly based on the PDF content
-- No vague, trivial, or generic questions
-- MCQ: exactly 4 options labeled A B C D, clearly mark the correct answer
-- 2-mark: short factual recall (define / state)
-- 3-mark: explanation or description
-- 5-mark: analysis, comparison, or extended response
- 
-Return ONLY valid compact JSON — no markdown, no code fences, no extra text:
-{{"mcq":[{{"q":"...","a":"...","b":"...","c":"...","d":"...","ans":"A"}}],"two_mark":[{{"q":"..."}}],"three_mark":[{{"q":"..."}}],"five_mark":[{{"q":"..."}}]}}
- 
-If a type was NOT requested, return an empty array [] for that key.
- 
-PDF TEXT:
-{text[:6000]}"""
- 
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        max_tokens=4000,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    raw   = response.choices[0].message.content
-    clean = raw.replace("```json", "").replace("```", "").strip()
-    return json.loads(clean)
- 
-@app.route("/")
-def index():
-    return render_template("index.html")
- 
+
+Return JSON ONLY:
+{{
+"mcq":[{{"q":"","a":"","b":"","c":"","d":"","ans":"A"}}],
+"two_mark":[{{"q":""}}],
+"three_mark":[{{"q":""}}],
+"five_mark":[{{"q":""}}]
+}}
+
+TEXT:
+{text[:5000]}
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            max_tokens=2000,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        raw = response.choices[0].message.content
+        clean = raw.replace("```json", "").replace("```", "").strip()
+
+        return json.loads(clean)
+
+    except Exception as e:
+        print("Groq Error:", e)
+        raise Exception("AI generation failed")
+
+
+# ---------------- GENERATE API ----------------
 @app.route("/generate", methods=["POST"])
 def generate():
-    if "pdf" not in request.files:
-        return jsonify({"error": "No PDF uploaded"}), 400
-    pdf_file = request.files["pdf"]
-    if pdf_file.filename == "":
-        return jsonify({"error": "No file selected"}), 400
-    types = request.form.getlist("types")
-    count = int(request.form.get("count", 5))
-    if not types:
-        return jsonify({"error": "No question types selected"}), 400
     try:
+        if "pdf" not in request.files:
+            return jsonify({"error": "No PDF uploaded"}), 400
+
+        pdf_file = request.files["pdf"]
+
+        if pdf_file.filename == "":
+            return jsonify({"error": "No file selected"}), 400
+
+        types = request.form.getlist("types")
+        count = int(request.form.get("count", 5))
+
         text = extract_text_from_pdf(pdf_file.stream)
-        if len(text) < 100:
-            return jsonify({"error": "Could not extract enough text from PDF."}), 400
+
+        if len(text) < 50:
+            return jsonify({"error": "PDF text too small"}), 400
+
         questions = generate_questions(text, types, count)
+
         return jsonify({"success": True, "data": questions})
-    except json.JSONDecodeError:
-        return jsonify({"error": "AI returned invalid JSON. Please try again."}), 500
+
     except Exception as e:
+        print("ERROR:", e)
         return jsonify({"error": str(e)}), 500
- 
+
+
+# ---------------- DOWNLOAD TXT ----------------
 @app.route("/download/txt", methods=["POST"])
 def download_txt():
     data = request.json.get("data", {})
-    lines = ["EXAM QUESTION PAPER", "Generated by ExamForge AI", "=" * 52, ""]
-    if data.get("mcq"):
-        lines += ["SECTION A — MULTIPLE CHOICE QUESTIONS", "-" * 40]
-        for i, q in enumerate(data["mcq"], 1):
-            lines.append(f"\nQ{i}. {q['q']}")
-            lines.append(f"  A. {q['a']}")
-            lines.append(f"  B. {q['b']}")
-            lines.append(f"  C. {q['c']}")
-            lines.append(f"  D. {q['d']}")
-        lines.append("")
-    if data.get("two_mark"):
-        lines += ["SECTION B — 2-MARK QUESTIONS", "-" * 40]
-        for i, q in enumerate(data["two_mark"], 1):
-            lines.append(f"\nQ{i}. {q['q']}")
-        lines.append("")
-    if data.get("three_mark"):
-        lines += ["SECTION C — 3-MARK QUESTIONS", "-" * 40]
-        for i, q in enumerate(data["three_mark"], 1):
-            lines.append(f"\nQ{i}. {q['q']}")
-        lines.append("")
-    if data.get("five_mark"):
-        lines += ["SECTION D — 5-MARK QUESTIONS", "-" * 40]
-        for i, q in enumerate(data["five_mark"], 1):
-            lines.append(f"\nQ{i}. {q['q']}")
+
+    lines = ["EXAM PAPER", "="*40]
+
+    for section in ["mcq", "two_mark", "three_mark", "five_mark"]:
+        for i, q in enumerate(data.get(section, []), 1):
+            lines.append(f"Q{i}. {q.get('q')}")
+
     buf = io.BytesIO("\n".join(lines).encode("utf-8"))
     buf.seek(0)
-    return send_file(buf, mimetype="text/plain", as_attachment=True, download_name="exam_questions.txt")
- 
+
+    return send_file(buf, as_attachment=True, download_name="questions.txt")
+
+
+# ---------------- DOWNLOAD PDF ----------------
 @app.route("/download/pdf", methods=["POST"])
 def download_pdf():
     data = request.json.get("data", {})
-    buf  = io.BytesIO()
-    doc  = SimpleDocTemplate(buf, pagesize=A4, leftMargin=2*cm, rightMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm)
-    styles      = getSampleStyleSheet()
-    title_style = ParagraphStyle("title", parent=styles["Heading1"], fontSize=18, spaceAfter=6)
-    head_style  = ParagraphStyle("head",  parent=styles["Heading2"], fontSize=13, spaceAfter=4, spaceBefore=14)
-    q_style     = ParagraphStyle("q",     parent=styles["Normal"],   fontSize=11, spaceAfter=4)
-    opt_style   = ParagraphStyle("opt",   parent=styles["Normal"],   fontSize=10, leftIndent=20, spaceAfter=2)
-    story = [Paragraph("Exam Question Paper", title_style), Spacer(1, 0.3*cm)]
-    if data.get("mcq"):
-        story.append(Paragraph("Section A — Multiple Choice Questions", head_style))
-        for i, q in enumerate(data["mcq"], 1):
-            story.append(Paragraph(f"<b>Q{i}.</b> {q['q']}", q_style))
-            for label, key in [("A","a"),("B","b"),("C","c"),("D","d")]:
-                story.append(Paragraph(f"{label}. {q[key]}", opt_style))
-            story.append(Spacer(1, 0.2*cm))
-    for section_key, title in [("two_mark","Section B — 2-Mark Questions"),("three_mark","Section C — 3-Mark Questions"),("five_mark","Section D — 5-Mark Questions")]:
-        if data.get(section_key):
-            story.append(Paragraph(title, head_style))
-            for i, q in enumerate(data[section_key], 1):
-                story.append(Paragraph(f"<b>Q{i}.</b> {q['q']}", q_style))
-                story.append(Spacer(1, 0.2*cm))
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4)
+
+    styles = getSampleStyleSheet()
+    story = []
+
+    for section in ["mcq", "two_mark", "three_mark", "five_mark"]:
+        for i, q in enumerate(data.get(section, []), 1):
+            story.append(Paragraph(f"Q{i}. {q.get('q')}", styles["Normal"]))
+            story.append(Spacer(1, 10))
+
     doc.build(story)
     buf.seek(0)
-    return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name="exam_questions.pdf")
- 
+
+    return send_file(buf, as_attachment=True, download_name="questions.pdf")
+
+
+# ---------------- RUN (LOCAL ONLY) ----------------
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))  # Railway uses dynamic port
-    app.run(host="0.0.0.0", port=port)        # Allow external access
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
