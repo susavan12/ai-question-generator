@@ -63,7 +63,7 @@ def extract_text_from_pdf(file_stream):
 
         with pdfplumber.open(file_stream) as pdf:
 
-            for page in pdf.pages[:20]:
+            for page in pdf.pages[:10]:
 
                 page_text = page.extract_text()
 
@@ -113,19 +113,37 @@ def generate_questions(text, types, count):
         "five_mark": []
     }
 
-    short_text = text[:2500]
+    # IMPORTANT: SMALLER TEXT = FASTER + NO RATE LIMIT
+    short_text = text[:1500]
 
-    try:
+    # BUILD REQUEST
+    types_desc = []
 
-        # ---------- MCQ ----------
-        if "mcq" in types:
+    if "mcq" in types:
+        types_desc.append(f"{count} MCQ questions")
 
-            prompt = f"""
-Generate EXACTLY {count} MCQ questions from the text.
+    if "2mark" in types:
+        types_desc.append(f"{count} short 2-mark questions")
 
-Return ONLY JSON.
+    if "3mark" in types:
+        types_desc.append(f"{count} descriptive 3-mark questions")
 
-FORMAT:
+    if "5mark" in types:
+        types_desc.append(f"{count} long 5-mark questions")
+
+    prompt = f"""
+You are an exam paper generator.
+
+Generate EXACTLY the requested number of questions.
+
+IMPORTANT RULES:
+- Return ONLY valid JSON
+- Do NOT write explanation
+- Do NOT use markdown
+- Do NOT use ```json
+
+JSON FORMAT:
+
 {{
   "mcq": [
     {{
@@ -136,131 +154,17 @@ FORMAT:
       "d": "option D",
       "ans": "A"
     }}
-  ]
-}}
-
-TEXT:
-{short_text}
-"""
-
-            response = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
-                temperature=0.3,
-                max_tokens=2500,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ]
-            )
-
-            raw = response.choices[0].message.content
-
-            parsed = extract_json(raw)
-
-            if not parsed:
-                parsed = {}
-
-            result["mcq"] = parsed.get("mcq", [])
-
-
-        # ---------- 2 MARK ----------
-        if "2mark" in types:
-
-            prompt = f"""
-Generate EXACTLY {count} short 2-mark questions from the text.
-
-Return ONLY JSON.
-
-FORMAT:
-{{
+  ],
   "two_mark": [
     {{
       "q": "question"
     }}
-  ]
-}}
-
-TEXT:
-{short_text}
-"""
-
-            response = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
-                temperature=0.3,
-                max_tokens=1500,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ]
-            )
-
-            raw = response.choices[0].message.content
-
-            parsed = extract_json(raw)
-
-            if not parsed:
-                parsed = {}
-
-            result["two_mark"] = parsed.get("two_mark", [])
-
-
-        # ---------- 3 MARK ----------
-        if "3mark" in types:
-
-            prompt = f"""
-Generate EXACTLY {count} descriptive 3-mark questions from the text.
-
-Return ONLY JSON.
-
-FORMAT:
-{{
+  ],
   "three_mark": [
     {{
       "q": "question"
     }}
-  ]
-}}
-
-TEXT:
-{short_text}
-"""
-
-            response = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
-                temperature=0.3,
-                max_tokens=1500,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ]
-            )
-
-            raw = response.choices[0].message.content
-
-            parsed = extract_json(raw)
-
-            if not parsed:
-                parsed = {}
-
-            result["three_mark"] = parsed.get("three_mark", [])
-
-
-        # ---------- 5 MARK ----------
-        if "5mark" in types:
-
-            prompt = f"""
-Generate EXACTLY {count} long 5-mark questions from the text.
-
-Return ONLY JSON.
-
-FORMAT:
-{{
+  ],
   "five_mark": [
     {{
       "q": "question"
@@ -268,33 +172,45 @@ FORMAT:
   ]
 }}
 
+Generate:
+{chr(10).join(types_desc)}
+
 TEXT:
 {short_text}
 """
 
-            response = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
-                temperature=0.3,
-                max_tokens=2000,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ]
-            )
+    try:
 
-            raw = response.choices[0].message.content
+        response = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            temperature=0.3,
+            max_tokens=1200,
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+        )
 
-            parsed = extract_json(raw)
+        raw = response.choices[0].message.content
 
-            if not parsed:
-                parsed = {}
+        print("========== RAW RESPONSE ==========")
+        print(raw)
+        print("==================================")
 
-            result["five_mark"] = parsed.get("five_mark", [])
+        parsed = extract_json(raw)
 
+        if not parsed:
+            parsed = {}
 
-        return result
+        # SAFE DEFAULTS
+        parsed.setdefault("mcq", [])
+        parsed.setdefault("two_mark", [])
+        parsed.setdefault("three_mark", [])
+        parsed.setdefault("five_mark", [])
+
+        return parsed
 
     except Exception as e:
 
@@ -336,6 +252,10 @@ def generate():
         types = request.form.getlist("types")
 
         count = int(request.form.get("count", 5))
+
+        # LIMIT COUNT
+        if count > 10:
+            count = 10
 
         if not types:
             return jsonify({
@@ -436,6 +356,7 @@ def download_pdf():
                 Spacer(1, 10)
             )
 
+    # IMPORTANT FIX
     doc.build(story)
 
     buf.seek(0)
