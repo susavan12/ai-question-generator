@@ -104,6 +104,7 @@ def extract_json(raw):
 
 
 # ---------------- AI QUESTION GENERATION ----------------
+# ---------------- AI QUESTION GENERATION ----------------
 def generate_questions(text, types, count):
 
     result = {
@@ -113,34 +114,38 @@ def generate_questions(text, types, count):
         "five_mark": []
     }
 
-    # IMPORTANT: SMALLER TEXT = FASTER + NO RATE LIMIT
-    short_text = text[:1500]
+    # SMALLER TEXT = FASTER RESPONSE
+    short_text = text[:1200]
 
-    # BUILD REQUEST
+    # BUILD QUESTION REQUEST
     types_desc = []
 
     if "mcq" in types:
-        types_desc.append(f"{count} MCQ questions")
+        types_desc.append(f"Generate EXACTLY {count} MCQ questions")
 
     if "2mark" in types:
-        types_desc.append(f"{count} short 2-mark questions")
+        types_desc.append(f"Generate EXACTLY {count} 2-mark questions")
 
     if "3mark" in types:
-        types_desc.append(f"{count} descriptive 3-mark questions")
+        types_desc.append(f"Generate EXACTLY {count} 3-mark questions")
 
     if "5mark" in types:
-        types_desc.append(f"{count} long 5-mark questions")
+        types_desc.append(f"Generate EXACTLY {count} 5-mark questions")
 
     prompt = f"""
-You are an exam paper generator.
+You are an expert exam paper generator.
 
-Generate EXACTLY the requested number of questions.
+VERY IMPORTANT RULES:
 
-IMPORTANT RULES:
-- Return ONLY valid JSON
-- Do NOT write explanation
-- Do NOT use markdown
-- Do NOT use ```json
+1. Generate EXACTLY the requested number of questions.
+2. Do NOT generate fewer questions.
+3. Return ONLY valid JSON.
+4. Do NOT write explanation.
+5. Do NOT use markdown.
+6. Do NOT use ```json.
+
+QUESTION REQUIREMENTS:
+{chr(10).join(types_desc)}
 
 JSON FORMAT:
 
@@ -155,25 +160,25 @@ JSON FORMAT:
       "ans": "A"
     }}
   ],
+
   "two_mark": [
     {{
       "q": "question"
     }}
   ],
+
   "three_mark": [
     {{
       "q": "question"
     }}
   ],
+
   "five_mark": [
     {{
       "q": "question"
     }}
   ]
 }}
-
-Generate:
-{chr(10).join(types_desc)}
 
 TEXT:
 {short_text}
@@ -183,8 +188,8 @@ TEXT:
 
         response = client.chat.completions.create(
             model="llama-3.1-8b-instant",
-            temperature=0.3,
-            max_tokens=1200,
+            temperature=0.2,
+            max_tokens=2500,
             messages=[
                 {
                     "role": "user",
@@ -193,22 +198,43 @@ TEXT:
             ]
         )
 
-        raw = response.choices[0].message.content
+        raw = response.choices[0].message.content.strip()
 
         print("========== RAW RESPONSE ==========")
         print(raw)
         print("==================================")
 
-        parsed = extract_json(raw)
+        # CLEAN RESPONSE
+        raw = raw.replace("```json", "")
+        raw = raw.replace("```", "")
+        raw = raw.strip()
 
-        if not parsed:
-            parsed = {}
+        start = raw.find("{")
+        end = raw.rfind("}")
+
+        if start != -1 and end != -1:
+            raw = raw[start:end + 1]
+
+        parsed = json.loads(raw)
 
         # SAFE DEFAULTS
         parsed.setdefault("mcq", [])
         parsed.setdefault("two_mark", [])
         parsed.setdefault("three_mark", [])
         parsed.setdefault("five_mark", [])
+
+        # FORCE EXACT QUESTION COUNT
+        if "mcq" in types:
+            parsed["mcq"] = parsed["mcq"][:count]
+
+        if "2mark" in types:
+            parsed["two_mark"] = parsed["two_mark"][:count]
+
+        if "3mark" in types:
+            parsed["three_mark"] = parsed["three_mark"][:count]
+
+        if "5mark" in types:
+            parsed["five_mark"] = parsed["five_mark"][:count]
 
         return parsed
 
@@ -223,7 +249,6 @@ TEXT:
             "five_mark": [],
             "error": str(e)
         }
-
 
 # ---------------- HOME PAGE ----------------
 @app.route("/")
