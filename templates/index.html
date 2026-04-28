@@ -466,247 +466,577 @@ let selectedFile = null;
 let generatedData = null;
 let activeTypes = new Set(['mcq','2mark','3mark','5mark']);
 let activeFilter = 'all';
- 
-/* --- DRAG & DROP --- */
-function onDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('dragover'); }
-function onDragLeave() { document.getElementById('drop-zone').classList.remove('dragover'); }
+
+/* ---------- DRAG & DROP ---------- */
+function onDragOver(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.add('dragover');
+}
+
+function onDragLeave() {
+  document.getElementById('drop-zone').classList.remove('dragover');
+}
+
 function onDrop(e) {
-  e.preventDefault(); onDragLeave();
+  e.preventDefault();
+  onDragLeave();
+
   const f = e.dataTransfer.files[0];
-  if (f && f.type === 'application/pdf') setFile(f);
-  else showErr('Please drop a valid PDF file.');
-}
-function handleFileInput(e) { if (e.target.files[0]) setFile(e.target.files[0]); }
- 
-function setFile(file) {
-  selectedFile = file;
-  hideErr();
-  document.getElementById('file-name-display').textContent = file.name;
-  document.getElementById('file-meta-display').textContent = '· ' + (file.size / 1024).toFixed(0) + ' KB';
-  document.getElementById('file-pill').classList.remove('hidden');
-  document.getElementById('gen-btn').disabled = false;
-}
- 
-function removeFile() {
-  selectedFile = null;
-  document.getElementById('file-pill').classList.add('hidden');
-  document.getElementById('upload-err').classList.add('hidden');
-  document.getElementById('file-input').value = '';
-  document.getElementById('gen-btn').disabled = true;
-  document.getElementById('results-section').classList.add('hidden');
-}
- 
-/* --- TOGGLE TYPES --- */
-function toggleType(btn) {
-  const t = btn.dataset.type;
-  if (activeTypes.has(t)) {
-    if (activeTypes.size === 1) return;
-    activeTypes.delete(t); btn.classList.remove('active');
+
+  if (f && f.type === 'application/pdf') {
+    setFile(f);
   } else {
-    activeTypes.add(t); btn.classList.add('active');
+    showErr('Please drop a valid PDF file.');
   }
 }
- 
-/* --- LOADER --- */
-const MSGS = ['Reading PDF content…','Identifying key concepts…','Crafting exam questions…','Formatting your question paper…'];
-let loadInterval, stepIdx = 0;
- 
+
+function handleFileInput(e) {
+  if (e.target.files[0]) {
+    setFile(e.target.files[0]);
+  }
+}
+
+function setFile(file) {
+
+  selectedFile = file;
+
+  hideErr();
+
+  document.getElementById('file-name-display').textContent = file.name;
+
+  document.getElementById('file-meta-display').textContent =
+    '· ' + (file.size / 1024).toFixed(0) + ' KB';
+
+  document.getElementById('file-pill').classList.remove('hidden');
+
+  document.getElementById('gen-btn').disabled = false;
+}
+
+function removeFile() {
+
+  selectedFile = null;
+
+  document.getElementById('file-pill').classList.add('hidden');
+
+  document.getElementById('upload-err').classList.add('hidden');
+
+  document.getElementById('file-input').value = '';
+
+  document.getElementById('gen-btn').disabled = true;
+
+  document.getElementById('results-section').classList.add('hidden');
+}
+
+/* ---------- QUESTION TYPES ---------- */
+function toggleType(btn) {
+
+  const t = btn.dataset.type;
+
+  if (activeTypes.has(t)) {
+
+    if (activeTypes.size === 1) return;
+
+    activeTypes.delete(t);
+
+    btn.classList.remove('active');
+
+  } else {
+
+    activeTypes.add(t);
+
+    btn.classList.add('active');
+  }
+}
+
+/* ---------- LOADER ---------- */
+const MSGS = [
+  'Reading PDF content…',
+  'Identifying key concepts…',
+  'Crafting exam questions…',
+  'Formatting your question paper…'
+];
+
+let loadInterval;
+let stepIdx = 0;
+
 function startLoader() {
+
   stepIdx = 0;
+
   const dots = document.querySelectorAll('.step-dot');
+
   dots.forEach(d => d.classList.remove('active'));
+
   dots[0].classList.add('active');
+
   document.getElementById('loader-msg').textContent = MSGS[0];
+
   document.getElementById('loading-card').classList.remove('hidden');
+
   loadInterval = setInterval(() => {
+
     stepIdx = (stepIdx + 1) % MSGS.length;
+
     document.getElementById('loader-msg').textContent = MSGS[stepIdx];
-    dots.forEach((d, i) => d.classList.toggle('active', i === stepIdx));
+
+    dots.forEach((d, i) => {
+      d.classList.toggle('active', i === stepIdx);
+    });
+
   }, 2200);
 }
+
 function stopLoader() {
+
   clearInterval(loadInterval);
+
   document.getElementById('loading-card').classList.add('hidden');
 }
- 
-/* --- GENERATE ---
-   Sends multipart/form-data to Flask POST /generate
-   matching: request.files["pdf"], request.form["types"], request.form["count"]
-*/
+
+/* ---------- GENERATE ---------- */
 async function generate() {
+
   if (!selectedFile) return;
- 
+
   const count = document.getElementById('q-count').value;
+
   const types = [...activeTypes];
- 
+
   document.getElementById('results-section').classList.add('hidden');
+
   startLoader();
+
   document.getElementById('gen-btn').disabled = true;
+
   hideErr();
- 
-  // Build FormData — matches Flask's request.files and request.form
+
   const fd = new FormData();
+
   fd.append('pdf', selectedFile);
+
   fd.append('count', count);
+
   types.forEach(t => fd.append('types', t));
- 
+
   try {
+
     const res = await fetch('/generate', {
       method: 'POST',
-      body: fd   // NO Content-Type header — browser sets multipart boundary automatically
+      body: fd
     });
- 
+
     const data = await res.json();
- 
-    if (!res.ok || data.error) {
+
+    console.log("FULL RESPONSE:", data);
+
+    if (!res.ok) {
       throw new Error(data.error || 'Server error');
     }
- 
-    generatedData = data.data;
+
+    if (!data.success) {
+      throw new Error(data.error || 'Generation failed');
+    }
+
+    generatedData = data.data || {};
+
+    generatedData.mcq = Array.isArray(generatedData.mcq)
+      ? generatedData.mcq : [];
+
+    generatedData.two_mark = Array.isArray(generatedData.two_mark)
+      ? generatedData.two_mark : [];
+
+    generatedData.three_mark = Array.isArray(generatedData.three_mark)
+      ? generatedData.three_mark : [];
+
+    generatedData.five_mark = Array.isArray(generatedData.five_mark)
+      ? generatedData.five_mark : [];
+
+    console.log("MCQ:", generatedData.mcq.length);
+    console.log("2 MARK:", generatedData.two_mark.length);
+    console.log("3 MARK:", generatedData.three_mark.length);
+    console.log("5 MARK:", generatedData.five_mark.length);
+
     stopLoader();
+
     renderResults(generatedData);
- 
+
   } catch (err) {
+
+    console.error(err);
+
     stopLoader();
-    showErr('⚠ Generation failed: ' + err.message + '. Please try again.');
+
+    showErr('⚠ Generation failed: ' + err.message);
+
   } finally {
+
     document.getElementById('gen-btn').disabled = false;
   }
 }
- 
+
 function regenerate() {
+
   document.getElementById('results-section').classList.add('hidden');
+
   generate();
 }
- 
-/* --- RENDER --- */
+
+/* ---------- RENDER RESULTS ---------- */
 function renderResults(d) {
-  const mcqs  = d.mcq        || [];
-  const two   = d.two_mark   || [];
+
+  console.log("RENDER DATA:", d);
+
+  const mcqs = d.mcq || [];
+
+  const two = d.two_mark || [];
+
   const three = d.three_mark || [];
-  const five  = d.five_mark  || [];
-  const total = mcqs.length + two.length + three.length + five.length;
- 
+
+  const five = d.five_mark || [];
+
+  const total =
+    mcqs.length +
+    two.length +
+    three.length +
+    five.length;
+
+  console.log("TOTAL:", total);
+
   document.getElementById('stats-grid').innerHTML = `
-    <div class="stat"><div class="stat-n">${total}</div><div class="stat-l">Total questions</div></div>
-    <div class="stat"><div class="stat-n">${mcqs.length}</div><div class="stat-l">MCQ</div></div>
-    <div class="stat"><div class="stat-n">${two.length + three.length}</div><div class="stat-l">Short / Medium</div></div>
-    <div class="stat"><div class="stat-n">${five.length}</div><div class="stat-l">Long answer</div></div>
+    <div class="stat">
+      <div class="stat-n">${total}</div>
+      <div class="stat-l">Total questions</div>
+    </div>
+
+    <div class="stat">
+      <div class="stat-n">${mcqs.length}</div>
+      <div class="stat-l">MCQ</div>
+    </div>
+
+    <div class="stat">
+      <div class="stat-n">${two.length + three.length}</div>
+      <div class="stat-l">Short / Medium</div>
+    </div>
+
+    <div class="stat">
+      <div class="stat-n">${five.length}</div>
+      <div class="stat-l">Long answer</div>
+    </div>
   `;
- 
-  const tabs = [['all', `All (${total})`]];
-  if (mcqs.length)  tabs.push(['mcq',   `MCQ (${mcqs.length})`]);
-  if (two.length)   tabs.push(['2mark', `2-Mark (${two.length})`]);
-  if (three.length) tabs.push(['3mark', `3-Mark (${three.length})`]);
-  if (five.length)  tabs.push(['5mark', `5-Mark (${five.length})`]);
+
+  const tabs = [
+    ['all', `All (${total})`]
+  ];
+
+  if (mcqs.length)
+    tabs.push(['mcq', `MCQ (${mcqs.length})`]);
+
+  if (two.length)
+    tabs.push(['2mark', `2-Mark (${two.length})`]);
+
+  if (three.length)
+    tabs.push(['3mark', `3-Mark (${three.length})`]);
+
+  if (five.length)
+    tabs.push(['5mark', `5-Mark (${five.length})`]);
+
   document.getElementById('filter-tabs').innerHTML =
-    tabs.map(([k, l]) => `<div class="ftab ${k==='all'?'on':''}" onclick="filterBy('${k}',this)">${l}</div>`).join('');
- 
+    tabs.map(([k, l]) => `
+      <div class="ftab ${k === 'all' ? 'on' : ''}"
+           onclick="filterBy('${k}',this)">
+        ${l}
+      </div>
+    `).join('');
+
   activeFilter = 'all';
+
   renderQuestions(d);
- 
-  document.getElementById('results-title').textContent = `Generated Questions (${total})`;
+
+  document.getElementById('results-title').textContent =
+    `Generated Questions (${total})`;
+
   const sec = document.getElementById('results-section');
+
   sec.classList.remove('hidden');
+
   sec.classList.add('fade-in');
-  sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  sec.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start'
+  });
 }
- 
+
+/* ---------- FILTER ---------- */
 function filterBy(key, tab) {
+
   activeFilter = key;
-  document.querySelectorAll('.ftab').forEach(t => t.classList.remove('on'));
+
+  document.querySelectorAll('.ftab').forEach(t => {
+    t.classList.remove('on');
+  });
+
   tab.classList.add('on');
+
   renderQuestions(generatedData);
 }
- 
+
+/* ---------- RENDER QUESTIONS ---------- */
 function renderQuestions(d) {
-  const mcqs  = d.mcq        || [];
-  const two   = d.two_mark   || [];
+
+  const mcqs = d.mcq || [];
+
+  const two = d.two_mark || [];
+
   const three = d.three_mark || [];
-  const five  = d.five_mark  || [];
+
+  const five = d.five_mark || [];
+
   let html = '';
-  const show = k => activeFilter === 'all' || activeFilter === k;
- 
+
+  const show = k =>
+    activeFilter === 'all' || activeFilter === k;
+
   if (show('mcq') && mcqs.length) {
-    html += sec('Multiple Choice Questions', mcqs.length, mcqs.map((q, i) => `
-      <div class="q-item">
-        <div class="q-meta"><span class="q-num-badge">MCQ · Q${i+1}</span><span class="mark-pill pill-mcq">MCQ</span></div>
-        <div class="q-text">${x(q.q)}</div>
-        <div class="mcq-grid">
-          ${['a','b','c','d'].map((o,li)=>`<div class="mcq-opt"><span class="opt-label">${'ABCD'[li]}.</span><span>${x(q[o])}</span></div>`).join('')}
+
+    html += sec(
+      'Multiple Choice Questions',
+      mcqs.length,
+      mcqs.map((q, i) => `
+        <div class="q-item">
+
+          <div class="q-meta">
+            <span class="q-num-badge">
+              MCQ · Q${i + 1}
+            </span>
+
+            <span class="mark-pill pill-mcq">
+              MCQ
+            </span>
+          </div>
+
+          <div class="q-text">
+            ${x(q.q)}
+          </div>
+
+          <div class="mcq-grid">
+
+            ${['a','b','c','d'].map((o,li)=>`
+
+              <div class="mcq-opt">
+
+                <span class="opt-label">
+                  ${'ABCD'[li]}.
+                </span>
+
+                <span>
+                  ${x(q[o])}
+                </span>
+
+              </div>
+
+            `).join('')}
+
+          </div>
+
         </div>
-      </div>`).join(''));
+      `).join('')
+    );
   }
+
   if (show('2mark') && two.length) {
-    html += sec('2-Mark Questions', two.length, two.map((q,i)=>`
-      <div class="q-item">
-        <div class="q-meta"><span class="q-num-badge">2-Mark · Q${i+1}</span><span class="mark-pill pill-2">2 Marks</span></div>
-        <div class="q-text">${x(q.q)}</div>
-      </div>`).join(''));
+
+    html += sec(
+      '2-Mark Questions',
+      two.length,
+      two.map((q,i)=>`
+
+        <div class="q-item">
+
+          <div class="q-meta">
+            <span class="q-num-badge">
+              2-Mark · Q${i+1}
+            </span>
+
+            <span class="mark-pill pill-2">
+              2 Marks
+            </span>
+          </div>
+
+          <div class="q-text">
+            ${x(q.q)}
+          </div>
+
+        </div>
+
+      `).join('')
+    );
   }
+
   if (show('3mark') && three.length) {
-    html += sec('3-Mark Questions', three.length, three.map((q,i)=>`
-      <div class="q-item">
-        <div class="q-meta"><span class="q-num-badge">3-Mark · Q${i+1}</span><span class="mark-pill pill-3">3 Marks</span></div>
-        <div class="q-text">${x(q.q)}</div>
-      </div>`).join(''));
+
+    html += sec(
+      '3-Mark Questions',
+      three.length,
+      three.map((q,i)=>`
+
+        <div class="q-item">
+
+          <div class="q-meta">
+            <span class="q-num-badge">
+              3-Mark · Q${i+1}
+            </span>
+
+            <span class="mark-pill pill-3">
+              3 Marks
+            </span>
+          </div>
+
+          <div class="q-text">
+            ${x(q.q)}
+          </div>
+
+        </div>
+
+      `).join('')
+    );
   }
+
   if (show('5mark') && five.length) {
-    html += sec('5-Mark Questions', five.length, five.map((q,i)=>`
-      <div class="q-item">
-        <div class="q-meta"><span class="q-num-badge">5-Mark · Q${i+1}</span><span class="mark-pill pill-5">5 Marks</span></div>
-        <div class="q-text">${x(q.q)}</div>
-      </div>`).join(''));
+
+    html += sec(
+      '5-Mark Questions',
+      five.length,
+      five.map((q,i)=>`
+
+        <div class="q-item">
+
+          <div class="q-meta">
+            <span class="q-num-badge">
+              5-Mark · Q${i+1}
+            </span>
+
+            <span class="mark-pill pill-5">
+              5 Marks
+            </span>
+          </div>
+
+          <div class="q-text">
+            ${x(q.q)}
+          </div>
+
+        </div>
+
+      `).join('')
+    );
   }
-  document.getElementById('questions-out').innerHTML = html ||
-    '<p style="color:var(--text2);text-align:center;padding:2rem;">No questions match the selected filter.</p>';
+
+  document.getElementById('questions-out').innerHTML =
+    html ||
+    '<p style="color:var(--text2);text-align:center;padding:2rem;">No questions generated.</p>';
 }
- 
+
+/* ---------- SECTION ---------- */
 function sec(title, count, inner) {
-  return `<div class="q-section">
-    <div class="q-section-head">
-      <h3>${title}</h3><span class="q-count-badge">${count} questions</span><div class="line"></div>
-    </div>${inner}</div>`;
+
+  return `
+    <div class="q-section">
+
+      <div class="q-section-head">
+
+        <h3>${title}</h3>
+
+        <span class="q-count-badge">
+          ${count} questions
+        </span>
+
+        <div class="line"></div>
+
+      </div>
+
+      ${inner}
+
+    </div>
+  `;
 }
- 
-/* --- DOWNLOAD — calls Flask /download/txt and /download/pdf --- */
+
+/* ---------- DOWNLOAD ---------- */
 async function dlTXT() {
+
   if (!generatedData) return;
+
   const res = await fetch('/download/txt', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ data: generatedData })
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      data: generatedData
+    })
   });
+
   const blob = await res.blob();
+
   dl(blob, 'exam_questions.txt');
 }
- 
+
 async function dlPDF() {
+
   if (!generatedData) return;
+
   const res = await fetch('/download/pdf', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ data: generatedData })
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      data: generatedData
+    })
   });
+
   const blob = await res.blob();
+
   dl(blob, 'exam_questions.pdf');
 }
- 
+
 function dl(blob, name) {
+
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = name; a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+
+  const a = document.createElement('a');
+
+  a.href = url;
+
+  a.download = name;
+
+  a.click();
+
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 2000);
 }
- 
-/* --- UTILS --- */
+
+/* ---------- UTIL ---------- */
 function x(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+  return String(s || '')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
 }
+
 function showErr(msg) {
+
   const el = document.getElementById('upload-err');
-  el.textContent = msg; el.classList.remove('hidden');
+
+  el.textContent = msg;
+
+  el.classList.remove('hidden');
 }
-function hideErr() { document.getElementById('upload-err').classList.add('hidden'); }
+
+function hideErr() {
+
+  document.getElementById('upload-err').classList.add('hidden');
+}
 </script>
-</body>
-</html>
