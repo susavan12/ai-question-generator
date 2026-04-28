@@ -21,19 +21,55 @@ if not GROQ_API_KEY:
 client = Groq(api_key=GROQ_API_KEY)
 
 
+# ---------------- TEST ROUTE ----------------
+@app.route("/test-groq")
+def test_groq():
+
+    try:
+
+        response = client.chat.completions.create(
+            model="llama3-8b-8192",
+            messages=[
+                {
+                    "role": "user",
+                    "content": "Say hello"
+                }
+            ]
+        )
+
+        return jsonify({
+            "success": True,
+            "response": response.choices[0].message.content
+        })
+
+    except Exception as e:
+
+        print("❌ TEST GROQ ERROR:", str(e))
+
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        })
+
+
 # ---------------- PDF TEXT ----------------
 def extract_text_from_pdf(file_stream):
+
     text = ""
 
     try:
+
         with pdfplumber.open(file_stream) as pdf:
+
             for page in pdf.pages[:20]:
+
                 page_text = page.extract_text()
 
                 if page_text:
                     text += page_text + "\n"
 
     except Exception as e:
+
         print("❌ PDF ERROR:", str(e))
 
     return text.strip()
@@ -61,7 +97,7 @@ Generate exam questions from this text.
 
 {chr(10).join(types_desc)}
 
-Return ONLY VALID JSON in this exact format:
+Return ONLY VALID JSON:
 {{
   "mcq":[{{"q":"","a":"","b":"","c":"","d":"","ans":"A"}}],
   "two_mark":[{{"q":""}}],
@@ -74,6 +110,7 @@ TEXT:
 """
 
     try:
+
         response = client.chat.completions.create(
             model="llama3-8b-8192",
             max_tokens=1500,
@@ -94,7 +131,9 @@ TEXT:
         clean = raw.replace("```json", "").replace("```", "").strip()
 
         try:
+
             parsed = json.loads(clean)
+
             return parsed
 
         except Exception as json_error:
@@ -107,7 +146,7 @@ TEXT:
                 "two_mark": [],
                 "three_mark": [],
                 "five_mark": [],
-                "debug": "JSON parse failed"
+                "error": "JSON parse failed"
             }
 
     except Exception as e:
@@ -169,6 +208,7 @@ def generate():
         print("🔥 SERVER ERROR:", str(e))
 
         return jsonify({
+            "success": False,
             "error": str(e)
         }), 500
 
@@ -223,7 +263,7 @@ def download_pdf():
 
             story.append(Spacer(1, 10))
 
-    doc.build(story)
+    doc.build(buf)
 
     buf.seek(0)
 
