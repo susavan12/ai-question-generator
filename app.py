@@ -263,7 +263,7 @@ def download_pdf():
 
             story.append(Spacer(1, 10))
 
-    doc.build(buf)
+    doc.build(story)
 
     buf.seek(0)
 
