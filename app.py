@@ -19,31 +19,7 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 print("GROQ KEY LOADED:", bool(GROQ_API_KEY))
 
-if not GROQ_API_KEY:
-    print("❌ ERROR: GROQ_API_KEY is missing!")
-
 client = Groq(api_key=GROQ_API_KEY)
-
-
-# ---------------- TEST ROUTE ----------------
-@app.route("/test-groq")
-def test_groq():
-    try:
-        response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[{"role": "user", "content": "Say hello"}]
-        )
-
-        return jsonify({
-            "success": True,
-            "response": response.choices[0].message.content
-        })
-
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        })
 
 
 # ---------------- PDF TEXT EXTRACTION ----------------
@@ -52,8 +28,6 @@ def extract_text_from_pdf(file_stream):
     text = ""
 
     try:
-        file_stream.seek(0)  # ✅ FIX: reset pointer every time
-
         with pdfplumber.open(file_stream) as pdf:
 
             for page in pdf.pages[:10]:
@@ -68,38 +42,8 @@ def extract_text_from_pdf(file_stream):
     return text.strip()
 
 
-# ---------------- SAFE JSON EXTRACTION ----------------
-def extract_json(raw):
-    try:
-        raw = raw.replace("```json", "")
-        raw = raw.replace("```", "")
-        raw = raw.strip()
-
-        start = raw.find("{")
-        end = raw.rfind("}")
-
-        if start != -1 and end != -1:
-            raw = raw[start:end + 1]
-
-        return json.loads(raw)
-
-    except Exception as e:
-        print("❌ JSON EXTRACT ERROR:", str(e))
-        print("RAW RESPONSE:")
-        print(raw)
-
-        return {}
-
-
 # ---------------- AI QUESTION GENERATION ----------------
 def generate_questions(text, types, count):
-
-    result = {
-        "mcq": [],
-        "two_mark": [],
-        "three_mark": [],
-        "five_mark": []
-    }
 
     short_text = text[:1200]
 
@@ -118,36 +62,16 @@ def generate_questions(text, types, count):
         types_desc.append(f"Generate EXACTLY {count} 5-mark questions")
 
     prompt = f"""
-You are an expert exam paper generator.
+Return ONLY valid JSON.
 
-VERY IMPORTANT RULES:
-
-1. Generate EXACTLY the requested number of questions.
-2. Do NOT generate fewer questions.
-3. Return ONLY valid JSON.
-4. Do NOT write explanation.
-5. Do NOT use markdown.
-6. Do NOT use ```json.
-
-QUESTION REQUIREMENTS:
 {chr(10).join(types_desc)}
 
-JSON FORMAT:
-
+FORMAT:
 {{
-  "mcq": [
-    {{
-      "q": "question",
-      "a": "option A",
-      "b": "option B",
-      "c": "option C",
-      "d": "option D",
-      "ans": "A"
-    }}
-  ],
-  "two_mark": [{{ "q": "question" }}],
-  "three_mark": [{{ "q": "question" }}],
-  "five_mark": [{{ "q": "question" }}]
+  "mcq": [],
+  "two_mark": [],
+  "three_mark": [],
+  "five_mark": []
 }}
 
 TEXT:
@@ -179,18 +103,6 @@ TEXT:
         parsed.setdefault("three_mark", [])
         parsed.setdefault("five_mark", [])
 
-        if "mcq" in types:
-            parsed["mcq"] = parsed["mcq"][:count]
-
-        if "2mark" in types:
-            parsed["two_mark"] = parsed["two_mark"][:count]
-
-        if "3mark" in types:
-            parsed["three_mark"] = parsed["three_mark"][:count]
-
-        if "5mark" in types:
-            parsed["five_mark"] = parsed["five_mark"][:count]
-
         return parsed
 
     except Exception as e:
@@ -200,18 +112,17 @@ TEXT:
             "mcq": [],
             "two_mark": [],
             "three_mark": [],
-            "five_mark": [],
-            "error": str(e)
+            "five_mark": []
         }
 
 
-# ---------------- HOME PAGE ----------------
+# ---------------- HOME ----------------
 @app.route("/")
 def index():
     return render_template("index.html")
 
 
-# ---------------- GENERATE ROUTE ----------------
+# ---------------- GENERATE ROUTE (FIXED) ----------------
 @app.route("/generate", methods=["POST"])
 def generate():
 
@@ -228,21 +139,30 @@ def generate():
         types = request.form.getlist("types")
         count = int(request.form.get("count", 5))
 
-        if count > 10:
-            count = 10
-
         if not types:
             return jsonify({"error": "No question types selected"}), 400
 
-        # ✅ FIX: SAFE FILE HANDLING
+        # ================= 🔥 FINAL FIX =================
+
+        # Read file fresh every time
         pdf_bytes = pdf_file.read()
+
+        if not pdf_bytes:
+            return jsonify({"error": "Empty PDF file"}), 400
+
+        # Create new stream
         pdf_stream = io.BytesIO(pdf_bytes)
+
+        # Reset pointer (VERY IMPORTANT)
+        pdf_stream.seek(0)
 
         text = extract_text_from_pdf(pdf_stream)
 
+        # ==============================================
+
         print("📄 Extracted Text Length:", len(text))
 
-        if len(text) < 100:
+        if len(text) < 50:
             return jsonify({"error": "PDF text too short"}), 400
 
         questions = generate_questions(text, types, count)
@@ -253,7 +173,6 @@ def generate():
         })
 
     except Exception as e:
-
         print("🔥 SERVER ERROR:", str(e))
 
         return jsonify({
@@ -285,7 +204,6 @@ def download_pdf():
     buf = io.BytesIO()
 
     doc = SimpleDocTemplate(buf, pagesize=A4)
-
     styles = getSampleStyleSheet()
 
     story = []
@@ -300,7 +218,6 @@ def download_pdf():
         story.append(Paragraph(section, styles["Heading2"]))
 
         for i, q in enumerate(questions, 1):
-
             story.append(Paragraph(f"Q{i}: {q.get('q', '')}", styles["Normal"]))
             story.append(Spacer(1, 10))
 
@@ -311,9 +228,13 @@ def download_pdf():
     return send_file(buf, as_attachment=True, download_name="questions.pdf")
 
 
-# ---------------- RUN APP ----------------
+# ---------------- RUN ----------------
 if __name__ == "__main__":
 
     port = int(os.environ.get("PORT", 8080))
 
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(
+        host="0.0.0.0",
+        port=port,
+        debug=True
+    )
