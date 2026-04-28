@@ -189,28 +189,74 @@
   .type-btn .t-name { font-size: 13px; font-weight: 600; color: var(--text); display: block; }
   .type-btn .t-sub { font-size: 10px; color: var(--text2); margin-top: 2px; display: block; }
  
-  /* SLIDER */
+  /* ================= FIXED SLIDER ================= */
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 1.5rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  width: 100%;
+  overflow: hidden; /* ✅ prevents overflow */
+}
+
+.slider-row label {
+  font-size: 13px;
+  color: var(--text2);
+  white-space: nowrap;
+  font-weight: 500;
+  flex-shrink: 0; /* ✅ prevents label from pushing slider */
+}
+
+.slider-row input[type=range] {
+  flex: 1;
+  min-width: 0; /* ✅ prevents overflow on mobile */
+  -webkit-appearance: none;
+  height: 4px;
+  background: var(--border2);
+  border-radius: 4px;
+  outline: none;
+}
+
+.slider-row input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  background: var(--text);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.count-display {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  min-width: 30px;
+  text-align: center;
+  font-family: 'Playfair Display', serif;
+  flex-shrink: 0; /* ✅ keeps number visible */
+}
+
+/* ✅ MOBILE FIX */
+@media (max-width: 640px) {
   .slider-row {
-    display: flex; align-items: center; gap: 14px;
-    margin-bottom: 1.5rem;
-    background: var(--surface2); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 14px 16px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
   }
-  .slider-row label { font-size: 13px; color: var(--text2); white-space: nowrap; font-weight: 500; }
-  .slider-row input[type=range] {
-    flex: 1; -webkit-appearance: none;
-    height: 4px; background: var(--border2); border-radius: 4px; outline: none;
+
+  .slider-row label {
+    text-align: left;
   }
-  .slider-row input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 18px; height: 18px;
-    background: var(--text); border-radius: 50%; cursor: pointer; transition: transform 0.15s;
-  }
-  .slider-row input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+
   .count-display {
-    font-size: 18px; font-weight: 600; color: var(--text);
-    min-width: 30px; text-align: center;
-    font-family: 'Playfair Display', serif;
+    align-self: flex-end;
   }
+}
  
   /* GENERATE BUTTON */
   .gen-btn {
