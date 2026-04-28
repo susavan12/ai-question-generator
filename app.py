@@ -11,6 +11,7 @@ import io
  
 app = Flask(__name__)
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+print("DEBUG GROQ KEY:", os.environ.get("GROQ_API_KEY"))
  
 def extract_text_from_pdf(file_stream):
     text = ""
