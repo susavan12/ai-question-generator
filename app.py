@@ -5,19 +5,18 @@ from flask import Flask, render_template, request, jsonify, send_file
 from groq import Groq
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import cm
+from reportlab.lib.styles import getSampleStyleSheet
 import io
 
 app = Flask(__name__)
 
-# ✅ SAFE API KEY LOAD
-print("GROQ KEY LOADED:", bool(os.environ.get("GROQ_API_KEY")))
+# ✅ FIXED API KEY LOAD
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+
+print("GROQ KEY LOADED:", bool(GROQ_API_KEY))
 
 if not GROQ_API_KEY:
     print("❌ ERROR: GROQ_API_KEY is missing!")
-else:
-    print("✅ GROQ API KEY LOADED")
 
 client = Groq(api_key=GROQ_API_KEY)
 
@@ -68,19 +67,29 @@ TEXT:
 
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            max_tokens=3000,
+            model="llama3-8b-8192",   # ✅ FIXED MODEL
+            max_tokens=1500,          # ✅ SAFE LIMIT
             messages=[{"role": "user", "content": prompt}]
         )
 
         raw = response.choices[0].message.content
         clean = raw.replace("```json", "").replace("```", "").strip()
 
-        return json.loads(clean)
+        try:
+            return json.loads(clean)
+        except:
+            print("⚠ JSON PARSE FAILED")
+            print("RAW OUTPUT:", raw)
+            return {
+                "mcq": [],
+                "two_mark": [],
+                "three_mark": [],
+                "five_mark": []
+            }
 
     except Exception as e:
         print("❌ GROQ ERROR:", e)
-        raise e
+        raise Exception("AI generation failed")
 
 
 # ---------------- ROUTES ----------------
