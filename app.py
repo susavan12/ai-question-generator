@@ -28,17 +28,10 @@ client = Groq(api_key=GROQ_API_KEY)
 # ---------------- TEST ROUTE ----------------
 @app.route("/test-groq")
 def test_groq():
-
     try:
-
         response = client.chat.completions.create(
             model="llama-3.1-8b-instant",
-            messages=[
-                {
-                    "role": "user",
-                    "content": "Say hello"
-                }
-            ]
+            messages=[{"role": "user", "content": "Say hello"}]
         )
 
         return jsonify({
@@ -47,7 +40,6 @@ def test_groq():
         })
 
     except Exception as e:
-
         return jsonify({
             "success": False,
             "error": str(e)
@@ -60,18 +52,17 @@ def extract_text_from_pdf(file_stream):
     text = ""
 
     try:
+        file_stream.seek(0)  # ✅ FIX: reset pointer every time
 
         with pdfplumber.open(file_stream) as pdf:
 
             for page in pdf.pages[:10]:
-
                 page_text = page.extract_text()
 
                 if page_text:
                     text += page_text + "\n"
 
     except Exception as e:
-
         print("❌ PDF ERROR:", str(e))
 
     return text.strip()
@@ -79,9 +70,7 @@ def extract_text_from_pdf(file_stream):
 
 # ---------------- SAFE JSON EXTRACTION ----------------
 def extract_json(raw):
-
     try:
-
         raw = raw.replace("```json", "")
         raw = raw.replace("```", "")
         raw = raw.strip()
@@ -95,7 +84,6 @@ def extract_json(raw):
         return json.loads(raw)
 
     except Exception as e:
-
         print("❌ JSON EXTRACT ERROR:", str(e))
         print("RAW RESPONSE:")
         print(raw)
@@ -103,7 +91,6 @@ def extract_json(raw):
         return {}
 
 
-# ---------------- AI QUESTION GENERATION ----------------
 # ---------------- AI QUESTION GENERATION ----------------
 def generate_questions(text, types, count):
 
@@ -114,10 +101,8 @@ def generate_questions(text, types, count):
         "five_mark": []
     }
 
-    # SMALLER TEXT = FASTER RESPONSE
     short_text = text[:1200]
 
-    # BUILD QUESTION REQUEST
     types_desc = []
 
     if "mcq" in types:
@@ -160,24 +145,9 @@ JSON FORMAT:
       "ans": "A"
     }}
   ],
-
-  "two_mark": [
-    {{
-      "q": "question"
-    }}
-  ],
-
-  "three_mark": [
-    {{
-      "q": "question"
-    }}
-  ],
-
-  "five_mark": [
-    {{
-      "q": "question"
-    }}
-  ]
+  "two_mark": [{{ "q": "question" }}],
+  "three_mark": [{{ "q": "question" }}],
+  "five_mark": [{{ "q": "question" }}]
 }}
 
 TEXT:
@@ -185,29 +155,16 @@ TEXT:
 """
 
     try:
-
         response = client.chat.completions.create(
             model="llama-3.1-8b-instant",
             temperature=0.2,
             max_tokens=2500,
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
+            messages=[{"role": "user", "content": prompt}]
         )
 
         raw = response.choices[0].message.content.strip()
 
-        print("========== RAW RESPONSE ==========")
-        print(raw)
-        print("==================================")
-
-        # CLEAN RESPONSE
-        raw = raw.replace("```json", "")
-        raw = raw.replace("```", "")
-        raw = raw.strip()
+        raw = raw.replace("```json", "").replace("```", "").strip()
 
         start = raw.find("{")
         end = raw.rfind("}")
@@ -217,13 +174,11 @@ TEXT:
 
         parsed = json.loads(raw)
 
-        # SAFE DEFAULTS
         parsed.setdefault("mcq", [])
         parsed.setdefault("two_mark", [])
         parsed.setdefault("three_mark", [])
         parsed.setdefault("five_mark", [])
 
-        # FORCE EXACT QUESTION COUNT
         if "mcq" in types:
             parsed["mcq"] = parsed["mcq"][:count]
 
@@ -239,7 +194,6 @@ TEXT:
         return parsed
 
     except Exception as e:
-
         print("❌ GENERATION ERROR:", str(e))
 
         return {
@@ -249,6 +203,7 @@ TEXT:
             "five_mark": [],
             "error": str(e)
         }
+
 
 # ---------------- HOME PAGE ----------------
 @app.route("/")
@@ -263,38 +218,32 @@ def generate():
     try:
 
         if "pdf" not in request.files:
-            return jsonify({
-                "error": "No PDF uploaded"
-            }), 400
+            return jsonify({"error": "No PDF uploaded"}), 400
 
         pdf_file = request.files["pdf"]
 
         if pdf_file.filename == "":
-            return jsonify({
-                "error": "No file selected"
-            }), 400
+            return jsonify({"error": "No file selected"}), 400
 
         types = request.form.getlist("types")
-
         count = int(request.form.get("count", 5))
 
-        # LIMIT COUNT
         if count > 10:
             count = 10
 
         if not types:
-            return jsonify({
-                "error": "No question types selected"
-            }), 400
+            return jsonify({"error": "No question types selected"}), 400
 
-        text = extract_text_from_pdf(pdf_file.stream)
+        # ✅ FIX: SAFE FILE HANDLING
+        pdf_bytes = pdf_file.read()
+        pdf_stream = io.BytesIO(pdf_bytes)
+
+        text = extract_text_from_pdf(pdf_stream)
 
         print("📄 Extracted Text Length:", len(text))
 
         if len(text) < 100:
-            return jsonify({
-                "error": "PDF text too short"
-            }), 400
+            return jsonify({"error": "PDF text too short"}), 400
 
         questions = generate_questions(text, types, count)
 
@@ -322,14 +271,9 @@ def download_txt():
     text = json.dumps(data, indent=2)
 
     buf = io.BytesIO(text.encode())
-
     buf.seek(0)
 
-    return send_file(
-        buf,
-        as_attachment=True,
-        download_name="questions.txt"
-    )
+    return send_file(buf, as_attachment=True, download_name="questions.txt")
 
 
 # ---------------- DOWNLOAD PDF ----------------
@@ -340,57 +284,31 @@ def download_pdf():
 
     buf = io.BytesIO()
 
-    doc = SimpleDocTemplate(
-        buf,
-        pagesize=A4
-    )
+    doc = SimpleDocTemplate(buf, pagesize=A4)
 
     styles = getSampleStyleSheet()
 
     story = []
 
-    story.append(
-        Paragraph(
-            "Exam Questions",
-            styles["Heading1"]
-        )
-    )
+    story.append(Paragraph("Exam Questions", styles["Heading1"]))
 
     for section, questions in data.items():
 
         if not isinstance(questions, list):
             continue
 
-        story.append(
-            Paragraph(
-                section,
-                styles["Heading2"]
-            )
-        )
+        story.append(Paragraph(section, styles["Heading2"]))
 
         for i, q in enumerate(questions, 1):
 
-            story.append(
-                Paragraph(
-                    f"Q{i}: {q.get('q', '')}",
-                    styles["Normal"]
-                )
-            )
+            story.append(Paragraph(f"Q{i}: {q.get('q', '')}", styles["Normal"]))
+            story.append(Spacer(1, 10))
 
-            story.append(
-                Spacer(1, 10)
-            )
-
-    # IMPORTANT FIX
     doc.build(story)
 
     buf.seek(0)
 
-    return send_file(
-        buf,
-        as_attachment=True,
-        download_name="questions.pdf"
-    )
+    return send_file(buf, as_attachment=True, download_name="questions.pdf")
 
 
 # ---------------- RUN APP ----------------
@@ -398,8 +316,4 @@ if __name__ == "__main__":
 
     port = int(os.environ.get("PORT", 8080))
 
-    app.run(
-        host="0.0.0.0",
-        port=port,
-        debug=True
-    )
+    app.run(host="0.0.0.0", port=port, debug=True)
