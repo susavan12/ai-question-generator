@@ -48,8 +48,6 @@ def test_groq():
 
     except Exception as e:
 
-        print("❌ TEST GROQ ERROR:", str(e))
-
         return jsonify({
             "success": False,
             "error": str(e)
@@ -79,38 +77,45 @@ def extract_text_from_pdf(file_stream):
     return text.strip()
 
 
+# ---------------- SAFE JSON EXTRACTION ----------------
+def extract_json(raw):
+
+    raw = raw.replace("```json", "")
+    raw = raw.replace("```", "")
+    raw = raw.strip()
+
+    start = raw.find("{")
+    end = raw.rfind("}")
+
+    if start != -1 and end != -1:
+        raw = raw[start:end + 1]
+
+    return json.loads(raw)
+
+
 # ---------------- AI QUESTION GENERATION ----------------
 def generate_questions(text, types, count):
 
-    types_desc = []
+    result = {
+        "mcq": [],
+        "two_mark": [],
+        "three_mark": [],
+        "five_mark": []
+    }
 
-    if "mcq" in types:
-        types_desc.append(f"{count} MCQ questions with 4 options A B C D")
+    short_text = text[:2500]
 
-    if "2mark" in types:
-        types_desc.append(f"{count} 2-mark short questions")
+    try:
 
-    if "3mark" in types:
-        types_desc.append(f"{count} 3-mark descriptive questions")
+        # ---------- MCQ ----------
+        if "mcq" in types:
 
-    if "5mark" in types:
-        types_desc.append(f"{count} 5-mark long questions")
+            prompt = f"""
+Generate EXACTLY {count} MCQ questions from the text.
 
-    prompt = f"""
-You are an exam paper generator.
+Return ONLY JSON.
 
-Generate questions ONLY from the given text.
-
-{chr(10).join(types_desc)}
-
-IMPORTANT:
-Return ONLY pure JSON.
-Do not write explanation.
-Do not use markdown.
-Do not use ```json
-
-JSON FORMAT:
-
+FORMAT:
 {{
   "mcq": [
     {{
@@ -121,17 +126,122 @@ JSON FORMAT:
       "d": "option D",
       "ans": "A"
     }}
-  ],
+  ]
+}}
+
+TEXT:
+{short_text}
+"""
+
+            response = client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                temperature=0.3,
+                max_tokens=2500,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
+            )
+
+            raw = response.choices[0].message.content
+
+            parsed = extract_json(raw)
+
+            result["mcq"] = parsed.get("mcq", [])
+
+
+        # ---------- 2 MARK ----------
+        if "2mark" in types:
+
+            prompt = f"""
+Generate EXACTLY {count} short 2-mark questions from the text.
+
+Return ONLY JSON.
+
+FORMAT:
+{{
   "two_mark": [
     {{
       "q": "question"
     }}
-  ],
+  ]
+}}
+
+TEXT:
+{short_text}
+"""
+
+            response = client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                temperature=0.3,
+                max_tokens=1500,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
+            )
+
+            raw = response.choices[0].message.content
+
+            parsed = extract_json(raw)
+
+            result["two_mark"] = parsed.get("two_mark", [])
+
+
+        # ---------- 3 MARK ----------
+        if "3mark" in types:
+
+            prompt = f"""
+Generate EXACTLY {count} descriptive 3-mark questions from the text.
+
+Return ONLY JSON.
+
+FORMAT:
+{{
   "three_mark": [
     {{
       "q": "question"
     }}
-  ],
+  ]
+}}
+
+TEXT:
+{short_text}
+"""
+
+            response = client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                temperature=0.3,
+                max_tokens=1500,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
+            )
+
+            raw = response.choices[0].message.content
+
+            parsed = extract_json(raw)
+
+            result["three_mark"] = parsed.get("three_mark", [])
+
+
+        # ---------- 5 MARK ----------
+        if "5mark" in types:
+
+            prompt = f"""
+Generate EXACTLY {count} long 5-mark questions from the text.
+
+Return ONLY JSON.
+
+FORMAT:
+{{
   "five_mark": [
     {{
       "q": "question"
@@ -140,47 +250,29 @@ JSON FORMAT:
 }}
 
 TEXT:
-{text[:2000]}
+{short_text}
 """
 
-    try:
+            response = client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                temperature=0.3,
+                max_tokens=2000,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
+            )
 
-        response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            temperature=0.2,
-            max_tokens=4000,
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
-        )
+            raw = response.choices[0].message.content
 
-        raw = response.choices[0].message.content.strip()
+            parsed = extract_json(raw)
 
-        print("========== RAW RESPONSE ==========")
-        print(raw)
-        print("==================================")
+            result["five_mark"] = parsed.get("five_mark", [])
 
-        clean = raw.replace("```json", "")
-        clean = clean.replace("```", "")
-        clean = clean.strip()
 
-        start = clean.find("{")
-        end = clean.rfind("}")
-
-        if start != -1 and end != -1:
-            clean = clean[start:end+1]
-
-        parsed = json.loads(clean)
-
-        parsed.setdefault("mcq", [])
-        parsed.setdefault("two_mark", [])
-        parsed.setdefault("three_mark", [])
-        parsed.setdefault("five_mark", [])
-
-        return parsed
+        return result
 
     except Exception as e:
 
@@ -222,10 +314,6 @@ def generate():
         types = request.form.getlist("types")
 
         count = int(request.form.get("count", 5))
-
-        # SAFETY LIMIT
-        if count > 7:
-            count = 7
 
         if not types:
             return jsonify({
