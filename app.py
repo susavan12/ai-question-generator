@@ -140,7 +140,7 @@ JSON FORMAT:
 }}
 
 TEXT:
-{text[:3000]}
+{text[:2000]}
 """
 
     try:
@@ -148,7 +148,7 @@ TEXT:
         response = client.chat.completions.create(
             model="llama-3.1-8b-instant",
             temperature=0.2,
-            max_tokens=2000,
+            max_tokens=4000,
             messages=[
                 {
                     "role": "user",
@@ -163,12 +163,10 @@ TEXT:
         print(raw)
         print("==================================")
 
-        # CLEAN RESPONSE
         clean = raw.replace("```json", "")
         clean = clean.replace("```", "")
         clean = clean.strip()
 
-        # FIND JSON START & END
         start = clean.find("{")
         end = clean.rfind("}")
 
@@ -177,7 +175,6 @@ TEXT:
 
         parsed = json.loads(clean)
 
-        # SAFE DEFAULTS
         parsed.setdefault("mcq", [])
         parsed.setdefault("two_mark", [])
         parsed.setdefault("three_mark", [])
@@ -225,6 +222,10 @@ def generate():
         types = request.form.getlist("types")
 
         count = int(request.form.get("count", 5))
+
+        # SAFETY LIMIT
+        if count > 7:
+            count = 7
 
         if not types:
             return jsonify({
@@ -301,6 +302,9 @@ def download_pdf():
     )
 
     for section, questions in data.items():
+
+        if not isinstance(questions, list):
+            continue
 
         story.append(
             Paragraph(
