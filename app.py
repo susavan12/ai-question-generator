@@ -80,17 +80,27 @@ def extract_text_from_pdf(file_stream):
 # ---------------- SAFE JSON EXTRACTION ----------------
 def extract_json(raw):
 
-    raw = raw.replace("```json", "")
-    raw = raw.replace("```", "")
-    raw = raw.strip()
+    try:
 
-    start = raw.find("{")
-    end = raw.rfind("}")
+        raw = raw.replace("```json", "")
+        raw = raw.replace("```", "")
+        raw = raw.strip()
 
-    if start != -1 and end != -1:
-        raw = raw[start:end + 1]
+        start = raw.find("{")
+        end = raw.rfind("}")
 
-    return json.loads(raw)
+        if start != -1 and end != -1:
+            raw = raw[start:end + 1]
+
+        return json.loads(raw)
+
+    except Exception as e:
+
+        print("❌ JSON EXTRACT ERROR:", str(e))
+        print("RAW RESPONSE:")
+        print(raw)
+
+        return {}
 
 
 # ---------------- AI QUESTION GENERATION ----------------
@@ -149,6 +159,9 @@ TEXT:
 
             parsed = extract_json(raw)
 
+            if not parsed:
+                parsed = {}
+
             result["mcq"] = parsed.get("mcq", [])
 
 
@@ -188,6 +201,9 @@ TEXT:
             raw = response.choices[0].message.content
 
             parsed = extract_json(raw)
+
+            if not parsed:
+                parsed = {}
 
             result["two_mark"] = parsed.get("two_mark", [])
 
@@ -229,6 +245,9 @@ TEXT:
 
             parsed = extract_json(raw)
 
+            if not parsed:
+                parsed = {}
+
             result["three_mark"] = parsed.get("three_mark", [])
 
 
@@ -268,6 +287,9 @@ TEXT:
             raw = response.choices[0].message.content
 
             parsed = extract_json(raw)
+
+            if not parsed:
+                parsed = {}
 
             result["five_mark"] = parsed.get("five_mark", [])
 
