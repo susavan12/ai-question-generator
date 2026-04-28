@@ -32,7 +32,7 @@ def test_groq():
     try:
 
         response = client.chat.completions.create(
-            model="llama3-8b-8192",
+            model="llama-3.1-8b-instant",
             messages=[
                 {
                     "role": "user",
@@ -146,7 +146,7 @@ TEXT:
     try:
 
         response = client.chat.completions.create(
-            model="llama3-8b-8192",
+            model="llama-3.1-8b-instant",
             temperature=0.2,
             max_tokens=2000,
             messages=[
@@ -168,7 +168,7 @@ TEXT:
         clean = clean.replace("```", "")
         clean = clean.strip()
 
-        # FIND JSON START
+        # FIND JSON START & END
         start = clean.find("{")
         end = clean.rfind("}")
 
@@ -196,6 +196,7 @@ TEXT:
             "five_mark": [],
             "error": str(e)
         }
+
 
 # ---------------- HOME PAGE ----------------
 @app.route("/")
