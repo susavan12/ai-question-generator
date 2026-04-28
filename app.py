@@ -85,7 +85,7 @@ def generate_questions(text, types, count):
     types_desc = []
 
     if "mcq" in types:
-        types_desc.append(f"{count} MCQ questions with 4 options A, B, C, D")
+        types_desc.append(f"{count} MCQ questions with 4 options A B C D")
 
     if "2mark" in types:
         types_desc.append(f"{count} 2-mark short questions")
@@ -97,49 +97,47 @@ def generate_questions(text, types, count):
         types_desc.append(f"{count} 5-mark long questions")
 
     prompt = f"""
-You are an AI exam paper generator.
+You are an exam paper generator.
 
 Generate questions ONLY from the given text.
 
-STRICT RULES:
-1. Return ONLY valid JSON
-2. Do NOT return markdown
-3. Do NOT add explanation
-4. Do NOT add extra text
-5. Every field must contain meaningful generated content
+{chr(10).join(types_desc)}
+
+IMPORTANT:
+Return ONLY pure JSON.
+Do not write explanation.
+Do not use markdown.
+Do not use ```json
 
 JSON FORMAT:
 
 {{
   "mcq": [
     {{
-      "q": "Question here",
-      "a": "Option A",
-      "b": "Option B",
-      "c": "Option C",
-      "d": "Option D",
+      "q": "question",
+      "a": "option A",
+      "b": "option B",
+      "c": "option C",
+      "d": "option D",
       "ans": "A"
     }}
   ],
   "two_mark": [
     {{
-      "q": "Question here"
+      "q": "question"
     }}
   ],
   "three_mark": [
     {{
-      "q": "Question here"
+      "q": "question"
     }}
   ],
   "five_mark": [
     {{
-      "q": "Question here"
+      "q": "question"
     }}
   ]
 }}
-
-Generate:
-{chr(10).join(types_desc)}
 
 TEXT:
 {text[:3000]}
@@ -149,8 +147,8 @@ TEXT:
 
         response = client.chat.completions.create(
             model="llama3-8b-8192",
-            temperature=0.3,
-            max_tokens=1800,
+            temperature=0.2,
+            max_tokens=2000,
             messages=[
                 {
                     "role": "user",
@@ -161,22 +159,25 @@ TEXT:
 
         raw = response.choices[0].message.content.strip()
 
-        print("========== RAW AI RESPONSE ==========")
+        print("========== RAW RESPONSE ==========")
         print(raw)
+        print("==================================")
 
-        # Remove markdown formatting
-        clean = raw.replace("```json", "").replace("```", "").strip()
+        # CLEAN RESPONSE
+        clean = raw.replace("```json", "")
+        clean = clean.replace("```", "")
+        clean = clean.strip()
 
-        # Extract proper JSON safely
+        # FIND JSON START
         start = clean.find("{")
         end = clean.rfind("}")
 
         if start != -1 and end != -1:
-            clean = clean[start:end + 1]
+            clean = clean[start:end+1]
 
         parsed = json.loads(clean)
 
-        # Ensure all keys exist
+        # SAFE DEFAULTS
         parsed.setdefault("mcq", [])
         parsed.setdefault("two_mark", [])
         parsed.setdefault("three_mark", [])
@@ -195,7 +196,6 @@ TEXT:
             "five_mark": [],
             "error": str(e)
         }
-
 
 # ---------------- HOME PAGE ----------------
 @app.route("/")
