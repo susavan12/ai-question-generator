@@ -513,6 +513,19 @@ let generatedData = null;
 let activeTypes = new Set(['mcq','2mark','3mark','5mark']);
 let activeFilter = 'all';
 
+/* ---------- ERROR HANDLING ---------- */
+function showErr(msg) {
+  const errBox = document.getElementById('upload-err');
+  errBox.textContent = msg;
+  errBox.classList.remove('hidden');
+}
+
+function hideErr() {
+  const errBox = document.getElementById('upload-err');
+  errBox.textContent = '';
+  errBox.classList.add('hidden');
+}
+
 /* ---------- DRAG & DROP ---------- */
 function onDragOver(e) {
   e.preventDefault();
@@ -573,7 +586,6 @@ function removeFile() {
   document.getElementById('file-pill').classList.add('hidden');
   document.getElementById('upload-err').classList.add('hidden');
 
-  // ✅ IMPORTANT FIX
   document.getElementById('file-input').value = "";
 
   document.getElementById('gen-btn').disabled = true;
@@ -636,7 +648,6 @@ async function generate() {
 
   const btn = document.getElementById('gen-btn');
 
-  // ✅ Prevent spam click
   if (!selectedFile || btn.disabled) return;
 
   btn.disabled = true;
@@ -652,11 +663,11 @@ async function generate() {
   const fd = new FormData();
   fd.append('pdf', selectedFile);
   fd.append('count', count);
+
   types.forEach(t => fd.append('types', t));
 
   try {
 
-    // ✅ Timeout protection (30s)
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30000);
 
@@ -709,69 +720,124 @@ function regenerate() {
   generate();
 }
 
-/* ---------- RENDER RESULTS ---------- */
-function renderResults(d) {
+/* ---------- FILTER ---------- */
+function filterBy(type, el) {
 
-  const mcqs = d.mcq || [];
-  const two = d.two_mark || [];
-  const three = d.three_mark || [];
-  const five = d.five_mark || [];
+  activeFilter = type;
 
-  const total = mcqs.length + two.length + three.length + five.length;
+  document.querySelectorAll('.ftab')
+    .forEach(t => t.classList.remove('on'));
 
-  // ✅ Empty result handling
-  if (total === 0) {
-    showErr('No questions generated. Try another PDF.');
-  }
+  el.classList.add('on');
 
-  document.getElementById('stats-grid').innerHTML = `
-    <div class="stat">
-      <div class="stat-n">${total}</div>
-      <div class="stat-l">Total questions</div>
-    </div>
-    <div class="stat">
-      <div class="stat-n">${mcqs.length}</div>
-      <div class="stat-l">MCQ</div>
-    </div>
-    <div class="stat">
-      <div class="stat-n">${two.length + three.length}</div>
-      <div class="stat-l">Short / Medium</div>
-    </div>
-    <div class="stat">
-      <div class="stat-n">${five.length}</div>
-      <div class="stat-l">Long answer</div>
-    </div>
-  `;
-
-  const tabs = [['all', `All (${total})`]];
-  if (mcqs.length) tabs.push(['mcq', `MCQ (${mcqs.length})`]);
-  if (two.length) tabs.push(['2mark', `2-Mark (${two.length})`]);
-  if (three.length) tabs.push(['3mark', `3-Mark (${three.length})`]);
-  if (five.length) tabs.push(['5mark', `5-Mark (${five.length})`]);
-
-  document.getElementById('filter-tabs').innerHTML =
-    tabs.map(([k, l]) => `
-      <div class="ftab ${k === 'all' ? 'on' : ''}"
-           onclick="filterBy('${k}',this)">
-        ${l}
-      </div>
-    `).join('');
-
-  activeFilter = 'all';
-  renderQuestions(d);
-
-  document.getElementById('results-title').textContent =
-    `Generated Questions (${total})`;
-
-  const sec = document.getElementById('results-section');
-  sec.classList.remove('hidden');
-  sec.classList.add('fade-in');
-
-  sec.scrollIntoView({
-    behavior: 'smooth',
-    block: 'start'
-  });
+  renderQuestions(generatedData);
 }
 
-/* ---------- REST UNCHANGED ---------- */
+/* ---------- RENDER QUESTIONS ---------- */
+function renderQuestions(d) {
+
+  const out = document.getElementById('questions-out');
+
+  let html = '';
+
+  function makeSection(title, arr, pill) {
+
+    if (!arr.length) return '';
+
+    return `
+      <div class="q-section">
+        <div class="q-section-head">
+          <h3>${title}</h3>
+          <div class="line"></div>
+          <div class="q-count-badge">${arr.length}</div>
+        </div>
+
+        ${arr.map((q, i) => `
+          <div class="q-item">
+            <div class="q-meta">
+              <div class="q-num-badge">Q${i + 1}</div>
+              <div class="mark-pill ${pill}">
+                ${title}
+              </div>
+            </div>
+
+            <div class="q-text">
+              ${typeof q === 'string' ? q : q.question}
+            </div>
+
+            ${q.options ? `
+              <div class="mcq-grid">
+                ${q.options.map((o, idx) => `
+                  <div class="mcq-opt">
+                    <span class="opt-label">
+                      ${String.fromCharCode(65 + idx)}.
+                    </span>
+                    <span>${o}</span>
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  if (activeFilter === 'all' || activeFilter === 'mcq') {
+    html += makeSection('MCQ', d.mcq || [], 'pill-mcq');
+  }
+
+  if (activeFilter === 'all' || activeFilter === '2mark') {
+    html += makeSection('2 Marks', d.two_mark || [], 'pill-2');
+  }
+
+  if (activeFilter === 'all' || activeFilter === '3mark') {
+    html += makeSection('3 Marks', d.three_mark || [], 'pill-3');
+  }
+
+  if (activeFilter === 'all' || activeFilter === '5mark') {
+    html += makeSection('5 Marks', d.five_mark || [], 'pill-5');
+  }
+
+  out.innerHTML = html;
+}
+
+/* ---------- DOWNLOAD ---------- */
+function dlTXT() {
+
+  if (!generatedData) return;
+
+  let txt = 'Generated Questions\n\n';
+
+  ['mcq', 'two_mark', 'three_mark', 'five_mark'].forEach(k => {
+
+    const arr = generatedData[k] || [];
+
+    arr.forEach((q, i) => {
+
+      txt += `${i + 1}. ${typeof q === 'string' ? q : q.question}\n`;
+
+      if (q.options) {
+        q.options.forEach((o, idx) => {
+          txt += `   ${String.fromCharCode(65 + idx)}. ${o}\n`;
+        });
+      }
+
+      txt += '\n';
+    });
+  });
+
+  const blob = new Blob([txt], { type: 'text/plain' });
+
+  const a = document.createElement('a');
+
+  a.href = URL.createObjectURL(blob);
+  a.download = 'questions.txt';
+
+  a.click();
+}
+
+function dlPDF() {
+  alert('PDF download connected from backend.');
+}
 </script>
