@@ -3,3 +3,4 @@ gunicorn
 groq
 pdfplumber
 reportlab
+python-dotenv
