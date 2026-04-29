@@ -548,7 +548,6 @@ function handleFileInput(e) {
 
 function setFile(file) {
 
-  // ✅ File size limit (5MB)
   if (file.size > 5 * 1024 * 1024) {
     showErr('File too large (max 5MB)');
     return;
@@ -566,15 +565,17 @@ function setFile(file) {
   document.getElementById('file-pill').classList.remove('hidden');
 
   document.getElementById('gen-btn').disabled = false;
-
-  document.getElementById('file-input').value = "";
 }
 
 function removeFile() {
   selectedFile = null;
+
   document.getElementById('file-pill').classList.add('hidden');
   document.getElementById('upload-err').classList.add('hidden');
-  document.getElementById('file-input').value = '';
+
+  // ✅ IMPORTANT FIX
+  document.getElementById('file-input').value = "";
+
   document.getElementById('gen-btn').disabled = true;
   document.getElementById('results-section').classList.add('hidden');
 }

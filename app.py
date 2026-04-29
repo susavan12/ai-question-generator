@@ -10,17 +10,16 @@ from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 
+from dotenv import load_dotenv
+load_dotenv()
 
 app = Flask(__name__)
 
-
 # ---------------- API KEY ----------------
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-
 print("GROQ KEY LOADED:", bool(GROQ_API_KEY))
 
 client = Groq(api_key=GROQ_API_KEY)
-
 
 # ---------------- PDF TEXT EXTRACTION ----------------
 def extract_text_from_pdf(file_stream):
@@ -28,11 +27,11 @@ def extract_text_from_pdf(file_stream):
     text = ""
 
     try:
-        with pdfplumber.open(file_stream) as pdf:
+        file_stream.seek(0)   # ✅ IMPORTANT FIX
 
+        with pdfplumber.open(file_stream) as pdf:
             for page in pdf.pages[:10]:
                 page_text = page.extract_text()
-
                 if page_text:
                     text += page_text + "\n"
 
@@ -40,7 +39,6 @@ def extract_text_from_pdf(file_stream):
         print("❌ PDF ERROR:", str(e))
 
     return text.strip()
-
 
 # ---------------- AI QUESTION GENERATION ----------------
 def generate_questions(text, types, count):
@@ -115,19 +113,16 @@ TEXT:
             "five_mark": []
         }
 
-
 # ---------------- HOME ----------------
 @app.route("/")
 def index():
     return render_template("index.html")
 
-
-# ---------------- GENERATE ROUTE (FIXED) ----------------
+# ---------------- GENERATE ROUTE ----------------
 @app.route("/generate", methods=["POST"])
 def generate():
 
     try:
-
         if "pdf" not in request.files:
             return jsonify({"error": "No PDF uploaded"}), 400
 
@@ -142,23 +137,17 @@ def generate():
         if not types:
             return jsonify({"error": "No question types selected"}), 400
 
-        # ================= 🔥 FINAL FIX =================
-
-        # Read file fresh every time
+        # ✅ READ FILE FRESH EVERY TIME
         pdf_bytes = pdf_file.read()
 
         if not pdf_bytes:
             return jsonify({"error": "Empty PDF file"}), 400
 
-        # Create new stream
+        # ✅ CREATE NEW STREAM (VERY IMPORTANT)
         pdf_stream = io.BytesIO(pdf_bytes)
-
-        # Reset pointer (VERY IMPORTANT)
         pdf_stream.seek(0)
 
         text = extract_text_from_pdf(pdf_stream)
-
-        # ==============================================
 
         print("📄 Extracted Text Length:", len(text))
 
@@ -180,7 +169,6 @@ def generate():
             "error": str(e)
         }), 500
 
-
 # ---------------- DOWNLOAD TXT ----------------
 @app.route("/download/txt", methods=["POST"])
 def download_txt():
@@ -193,7 +181,6 @@ def download_txt():
     buf.seek(0)
 
     return send_file(buf, as_attachment=True, download_name="questions.txt")
-
 
 # ---------------- DOWNLOAD PDF ----------------
 @app.route("/download/pdf", methods=["POST"])
@@ -226,7 +213,6 @@ def download_pdf():
     buf.seek(0)
 
     return send_file(buf, as_attachment=True, download_name="questions.pdf")
-
 
 # ---------------- RUN ----------------
 if __name__ == "__main__":
