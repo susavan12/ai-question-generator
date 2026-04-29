@@ -8,16 +8,18 @@ from groq import Groq
 
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import cm
+from reportlab.lib.styles import getSampleStyleSheet
 
 from dotenv import load_dotenv
+
+# ---------------- LOAD ENV ----------------
 load_dotenv()
 
 app = Flask(__name__)
 
 # ---------------- API KEY ----------------
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+
 print("GROQ KEY LOADED:", bool(GROQ_API_KEY))
 
 client = Groq(api_key=GROQ_API_KEY)
@@ -28,67 +30,117 @@ def extract_text_from_pdf(file_stream):
     text = ""
 
     try:
-        file_stream.seek(0)   # ✅ IMPORTANT FIX
+
+        file_stream.seek(0)
 
         with pdfplumber.open(file_stream) as pdf:
-            for page in pdf.pages[:10]:
+
+            max_pages = min(len(pdf.pages), 20)
+
+            for i in range(max_pages):
+
+                page = pdf.pages[i]
+
                 page_text = page.extract_text()
+
                 if page_text:
                     text += page_text + "\n"
 
     except Exception as e:
-        print("❌ PDF ERROR:", str(e))
+        print("❌ PDF EXTRACTION ERROR:", str(e))
 
     return text.strip()
 
 # ---------------- AI QUESTION GENERATION ----------------
 def generate_questions(text, types, count):
 
-    short_text = text[:1200]
+    short_text = text[:12000]
 
-    types_desc = []
+    type_prompt = []
 
     if "mcq" in types:
-        types_desc.append(f"Generate EXACTLY {count} MCQ questions")
+        type_prompt.append(f"{count} MCQ questions")
 
     if "2mark" in types:
-        types_desc.append(f"Generate EXACTLY {count} 2-mark questions")
+        type_prompt.append(f"{count} short 2-mark questions")
 
     if "3mark" in types:
-        types_desc.append(f"Generate EXACTLY {count} 3-mark questions")
+        type_prompt.append(f"{count} medium 3-mark questions")
 
     if "5mark" in types:
-        types_desc.append(f"Generate EXACTLY {count} 5-mark questions")
+        type_prompt.append(f"{count} long 5-mark questions")
 
     prompt = f"""
+Generate exam questions from the provided study material.
+
+Generate:
+{chr(10).join(type_prompt)}
+
 Return ONLY valid JSON.
 
-{chr(10).join(types_desc)}
-
 FORMAT:
+
 {{
-  "mcq": [],
-  "two_mark": [],
-  "three_mark": [],
-  "five_mark": []
+  "mcq": [
+    {{
+      "question": "Sample question",
+      "options": [
+        "Option A",
+        "Option B",
+        "Option C",
+        "Option D"
+      ]
+    }}
+  ],
+
+  "two_mark": [
+    {{
+      "question": "Sample 2 mark question"
+    }}
+  ],
+
+  "three_mark": [
+    {{
+      "question": "Sample 3 mark question"
+    }}
+  ],
+
+  "five_mark": [
+    {{
+      "question": "Sample 5 mark question"
+    }}
+  ]
 }}
 
-TEXT:
+STUDY MATERIAL:
 {short_text}
 """
 
     try:
+
         response = client.chat.completions.create(
             model="llama-3.1-8b-instant",
-            temperature=0.2,
-            max_tokens=2500,
-            messages=[{"role": "user", "content": prompt}]
+            temperature=0.3,
+            max_tokens=3000,
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
         )
 
         raw = response.choices[0].message.content.strip()
 
-        raw = raw.replace("```json", "").replace("```", "").strip()
+        print("RAW AI RESPONSE:")
+        print(raw)
 
+        # Remove markdown formatting
+        raw = raw.replace("```json", "")
+        raw = raw.replace("```", "")
+        raw = raw.strip()
+
+        # Extract JSON safely
         start = raw.find("{")
         end = raw.rfind("}")
 
@@ -97,6 +149,7 @@ TEXT:
 
         parsed = json.loads(raw)
 
+        # Safety defaults
         parsed.setdefault("mcq", [])
         parsed.setdefault("two_mark", [])
         parsed.setdefault("three_mark", [])
@@ -105,7 +158,8 @@ TEXT:
         return parsed
 
     except Exception as e:
-        print("❌ GENERATION ERROR:", str(e))
+
+        print("❌ AI GENERATION ERROR:", str(e))
 
         return {
             "mcq": [],
@@ -119,42 +173,59 @@ TEXT:
 def index():
     return render_template("index.html")
 
-# ---------------- GENERATE ROUTE ----------------
+# ---------------- GENERATE QUESTIONS ----------------
 @app.route("/generate", methods=["POST"])
 def generate():
 
     try:
+
+        # ---------------- CHECK PDF ----------------
         if "pdf" not in request.files:
-            return jsonify({"error": "No PDF uploaded"}), 400
+            return jsonify({
+                "success": False,
+                "error": "No PDF uploaded"
+            }), 400
 
         pdf_file = request.files["pdf"]
 
         if pdf_file.filename == "":
-            return jsonify({"error": "No file selected"}), 400
+            return jsonify({
+                "success": False,
+                "error": "No file selected"
+            }), 400
 
+        # ---------------- FORM DATA ----------------
         types = request.form.getlist("types")
         count = int(request.form.get("count", 5))
 
         if not types:
-            return jsonify({"error": "No question types selected"}), 400
+            return jsonify({
+                "success": False,
+                "error": "No question types selected"
+            }), 400
 
-        # ✅ READ FILE FRESH EVERY TIME
+        # ---------------- READ PDF ----------------
         pdf_bytes = pdf_file.read()
 
         if not pdf_bytes:
-            return jsonify({"error": "Empty PDF file"}), 400
+            return jsonify({
+                "success": False,
+                "error": "Uploaded PDF is empty"
+            }), 400
 
-        # ✅ CREATE NEW STREAM (VERY IMPORTANT)
         pdf_stream = io.BytesIO(pdf_bytes)
-        pdf_stream.seek(0)
 
         text = extract_text_from_pdf(pdf_stream)
 
         print("📄 Extracted Text Length:", len(text))
 
-        if len(text) < 50:
-            return jsonify({"error": "PDF text too short"}), 400
+        if len(text.strip()) < 50:
+            return jsonify({
+                "success": False,
+                "error": "No readable text found in PDF"
+            }), 400
 
+        # ---------------- GENERATE ----------------
         questions = generate_questions(text, types, count)
 
         return jsonify({
@@ -163,6 +234,7 @@ def generate():
         })
 
     except Exception as e:
+
         print("🔥 SERVER ERROR:", str(e))
 
         return jsonify({
@@ -174,48 +246,124 @@ def generate():
 @app.route("/download/txt", methods=["POST"])
 def download_txt():
 
-    data = request.json.get("data", {})
+    try:
 
-    text = json.dumps(data, indent=2)
+        data = request.json.get("data", {})
 
-    buf = io.BytesIO(text.encode())
-    buf.seek(0)
+        text = json.dumps(data, indent=2)
 
-    return send_file(buf, as_attachment=True, download_name="questions.txt")
+        buffer = io.BytesIO()
+
+        buffer.write(text.encode("utf-8"))
+
+        buffer.seek(0)
+
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name="questions.txt",
+            mimetype="text/plain"
+        )
+
+    except Exception as e:
+
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 # ---------------- DOWNLOAD PDF ----------------
 @app.route("/download/pdf", methods=["POST"])
 def download_pdf():
 
-    data = request.json.get("data", {})
+    try:
 
-    buf = io.BytesIO()
+        data = request.json.get("data", {})
 
-    doc = SimpleDocTemplate(buf, pagesize=A4)
-    styles = getSampleStyleSheet()
+        buffer = io.BytesIO()
 
-    story = []
+        doc = SimpleDocTemplate(buffer, pagesize=A4)
 
-    story.append(Paragraph("Exam Questions", styles["Heading1"]))
+        styles = getSampleStyleSheet()
 
-    for section, questions in data.items():
+        story = []
 
-        if not isinstance(questions, list):
-            continue
+        story.append(
+            Paragraph("Generated Exam Questions", styles["Heading1"])
+        )
 
-        story.append(Paragraph(section, styles["Heading2"]))
+        section_names = {
+            "mcq": "MCQ Questions",
+            "two_mark": "2-Mark Questions",
+            "three_mark": "3-Mark Questions",
+            "five_mark": "5-Mark Questions"
+        }
 
-        for i, q in enumerate(questions, 1):
-            story.append(Paragraph(f"Q{i}: {q.get('q', '')}", styles["Normal"]))
-            story.append(Spacer(1, 10))
+        for key, title in section_names.items():
 
-    doc.build(story)
+            questions = data.get(key, [])
 
-    buf.seek(0)
+            if not questions:
+                continue
 
-    return send_file(buf, as_attachment=True, download_name="questions.pdf")
+            story.append(
+                Spacer(1, 12)
+            )
 
-# ---------------- RUN ----------------
+            story.append(
+                Paragraph(title, styles["Heading2"])
+            )
+
+            for i, q in enumerate(questions, 1):
+
+                question_text = q.get("question", "")
+
+                story.append(
+                    Paragraph(
+                        f"<b>Q{i}:</b> {question_text}",
+                        styles["Normal"]
+                    )
+                )
+
+                # MCQ options
+                if "options" in q:
+
+                    options = q["options"]
+
+                    for idx, opt in enumerate(options):
+
+                        option_letter = chr(65 + idx)
+
+                        story.append(
+                            Paragraph(
+                                f"{option_letter}. {opt}",
+                                styles["Normal"]
+                            )
+                        )
+
+                story.append(
+                    Spacer(1, 10)
+                )
+
+        doc.build(story)
+
+        buffer.seek(0)
+
+        return send_file(
+            buffer,
+            as_attachment=True,
+            download_name="questions.pdf",
+            mimetype="application/pdf"
+        )
+
+    except Exception as e:
+
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+# ---------------- RUN APP ----------------
 if __name__ == "__main__":
 
     port = int(os.environ.get("PORT", 8080))
