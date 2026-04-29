@@ -738,10 +738,9 @@ async function generate() {
 
     const controller = new AbortController();
 
-    // ✅ FIXED TIMEOUT
     const timeout = setTimeout(() => {
       controller.abort();
-    }, 90000);
+    }, 120000);
 
     const res = await fetch('/generate', {
       method: 'POST',
@@ -750,6 +749,21 @@ async function generate() {
     });
 
     clearTimeout(timeout);
+
+    /* ---------- IMPORTANT FIX ---------- */
+
+    const contentType = res.headers.get("content-type");
+
+    if (!contentType || !contentType.includes("application/json")) {
+
+      const text = await res.text();
+
+      console.log(text);
+
+      throw new Error(
+        "Server returned HTML instead of JSON. Backend crashed or Render server restarted."
+      );
+    }
 
     const data = await res.json();
 
@@ -785,12 +799,13 @@ async function generate() {
 
     stopLoader();
 
-    // ✅ FIXED
     renderResults(generatedData);
 
   } catch (err) {
 
     stopLoader();
+
+    console.error(err);
 
     if (err.name === 'AbortError') {
 
@@ -798,7 +813,7 @@ async function generate() {
 
     } else {
 
-      showErr('⚠ Generation failed: ' + err.message);
+      showErr('⚠ ' + err.message);
     }
 
   } finally {
