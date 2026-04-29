@@ -515,46 +515,78 @@ let activeFilter = 'all';
 
 /* ---------- ERROR HANDLING ---------- */
 function showErr(msg) {
+
   const errBox = document.getElementById('upload-err');
+
   errBox.textContent = msg;
+
   errBox.classList.remove('hidden');
 }
 
 function hideErr() {
+
   const errBox = document.getElementById('upload-err');
+
   errBox.textContent = '';
+
   errBox.classList.add('hidden');
 }
 
 /* ---------- DRAG & DROP ---------- */
 function onDragOver(e) {
+
   e.preventDefault();
-  document.getElementById('drop-zone').classList.add('dragover');
+
+  document.getElementById('drop-zone')
+    .classList.add('dragover');
 }
 
 function onDragLeave() {
-  document.getElementById('drop-zone').classList.remove('dragover');
+
+  document.getElementById('drop-zone')
+    .classList.remove('dragover');
 }
 
 function onDrop(e) {
+
   e.preventDefault();
+
   onDragLeave();
 
   const f = e.dataTransfer.files[0];
 
-  if (f && (f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'))) {
+  if (
+    f &&
+    (
+      f.type === 'application/pdf' ||
+      f.name.toLowerCase().endsWith('.pdf')
+    )
+  ) {
+
     setFile(f);
+
   } else {
+
     showErr('Please drop a valid PDF file.');
   }
 }
 
 function handleFileInput(e) {
+
   const f = e.target.files[0];
 
-  if (f && (f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'))) {
+  if (
+    f &&
+    (
+      f.type === 'application/pdf' ||
+      f.name.toLowerCase().endsWith('.pdf')
+    )
+  ) {
+
     setFile(f);
+
   } else {
+
     showErr('Please select a valid PDF file.');
   }
 }
@@ -562,6 +594,7 @@ function handleFileInput(e) {
 function setFile(file) {
 
   if (file.size > 5 * 1024 * 1024) {
+
     showErr('File too large (max 5MB)');
     return;
   }
@@ -570,38 +603,56 @@ function setFile(file) {
 
   hideErr();
 
-  document.getElementById('file-name-display').textContent = file.name;
+  document.getElementById('file-name-display')
+    .textContent = file.name;
 
-  document.getElementById('file-meta-display').textContent =
-    '· ' + (file.size / 1024).toFixed(0) + ' KB';
+  document.getElementById('file-meta-display')
+    .textContent =
+      '· ' + (file.size / 1024).toFixed(0) + ' KB';
 
-  document.getElementById('file-pill').classList.remove('hidden');
+  document.getElementById('file-pill')
+    .classList.remove('hidden');
 
-  document.getElementById('gen-btn').disabled = false;
+  document.getElementById('gen-btn')
+    .disabled = false;
 }
 
 function removeFile() {
+
   selectedFile = null;
 
-  document.getElementById('file-pill').classList.add('hidden');
-  document.getElementById('upload-err').classList.add('hidden');
+  document.getElementById('file-pill')
+    .classList.add('hidden');
+
+  document.getElementById('upload-err')
+    .classList.add('hidden');
 
   document.getElementById('file-input').value = "";
 
-  document.getElementById('gen-btn').disabled = true;
-  document.getElementById('results-section').classList.add('hidden');
+  document.getElementById('gen-btn')
+    .disabled = true;
+
+  document.getElementById('results-section')
+    .classList.add('hidden');
 }
 
 /* ---------- QUESTION TYPES ---------- */
 function toggleType(btn) {
+
   const t = btn.dataset.type;
 
   if (activeTypes.has(t)) {
+
     if (activeTypes.size === 1) return;
+
     activeTypes.delete(t);
+
     btn.classList.remove('active');
+
   } else {
+
     activeTypes.add(t);
+
     btn.classList.add('active');
   }
 }
@@ -618,29 +669,41 @@ let loadInterval;
 let stepIdx = 0;
 
 function startLoader() {
+
   stepIdx = 0;
 
   const dots = document.querySelectorAll('.step-dot');
+
   dots.forEach(d => d.classList.remove('active'));
 
   dots[0].classList.add('active');
-  document.getElementById('loader-msg').textContent = MSGS[0];
 
-  document.getElementById('loading-card').classList.remove('hidden');
+  document.getElementById('loader-msg')
+    .textContent = MSGS[0];
+
+  document.getElementById('loading-card')
+    .classList.remove('hidden');
 
   loadInterval = setInterval(() => {
+
     stepIdx = (stepIdx + 1) % MSGS.length;
-    document.getElementById('loader-msg').textContent = MSGS[stepIdx];
+
+    document.getElementById('loader-msg')
+      .textContent = MSGS[stepIdx];
 
     dots.forEach((d, i) => {
       d.classList.toggle('active', i === stepIdx);
     });
+
   }, 2200);
 }
 
 function stopLoader() {
+
   clearInterval(loadInterval);
-  document.getElementById('loading-card').classList.add('hidden');
+
+  document.getElementById('loading-card')
+    .classList.add('hidden');
 }
 
 /* ---------- GENERATE ---------- */
@@ -652,24 +715,33 @@ async function generate() {
 
   btn.disabled = true;
 
-  const count = document.getElementById('q-count').value;
-  const types = [...activeTypes];
-
-  document.getElementById('results-section').classList.add('hidden');
-
-  startLoader();
   hideErr();
 
+  document.getElementById('results-section')
+    .classList.add('hidden');
+
+  startLoader();
+
+  const count = document.getElementById('q-count').value;
+
   const fd = new FormData();
+
   fd.append('pdf', selectedFile);
+
   fd.append('count', count);
 
-  types.forEach(t => fd.append('types', t));
+  [...activeTypes].forEach(t => {
+    fd.append('types', t);
+  });
 
   try {
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
+
+    // ✅ FIXED TIMEOUT
+    const timeout = setTimeout(() => {
+      controller.abort();
+    }, 90000);
 
     const res = await fetch('/generate', {
       method: 'POST',
@@ -691,13 +763,29 @@ async function generate() {
 
     generatedData = data.data || {};
 
-    generatedData.mcq = Array.isArray(generatedData.mcq) ? generatedData.mcq : [];
-    generatedData.two_mark = Array.isArray(generatedData.two_mark) ? generatedData.two_mark : [];
-    generatedData.three_mark = Array.isArray(generatedData.three_mark) ? generatedData.three_mark : [];
-    generatedData.five_mark = Array.isArray(generatedData.five_mark) ? generatedData.five_mark : [];
+    generatedData.mcq =
+      Array.isArray(generatedData.mcq)
+        ? generatedData.mcq
+        : [];
+
+    generatedData.two_mark =
+      Array.isArray(generatedData.two_mark)
+        ? generatedData.two_mark
+        : [];
+
+    generatedData.three_mark =
+      Array.isArray(generatedData.three_mark)
+        ? generatedData.three_mark
+        : [];
+
+    generatedData.five_mark =
+      Array.isArray(generatedData.five_mark)
+        ? generatedData.five_mark
+        : [];
 
     stopLoader();
 
+    // ✅ FIXED
     renderResults(generatedData);
 
   } catch (err) {
@@ -705,19 +793,103 @@ async function generate() {
     stopLoader();
 
     if (err.name === 'AbortError') {
+
       showErr('Request timed out. Try again.');
+
     } else {
+
       showErr('⚠ Generation failed: ' + err.message);
     }
 
   } finally {
+
     btn.disabled = false;
   }
 }
 
+/* ---------- REGENERATE ---------- */
 function regenerate() {
-  document.getElementById('results-section').classList.add('hidden');
+
+  document.getElementById('results-section')
+    .classList.add('hidden');
+
   generate();
+}
+
+/* ---------- RENDER RESULTS ---------- */
+function renderResults(d) {
+
+  const mcqs = d.mcq || [];
+  const two = d.two_mark || [];
+  const three = d.three_mark || [];
+  const five = d.five_mark || [];
+
+  const total =
+    mcqs.length +
+    two.length +
+    three.length +
+    five.length;
+
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="stat">
+      <div class="stat-n">${total}</div>
+      <div class="stat-l">Total questions</div>
+    </div>
+
+    <div class="stat">
+      <div class="stat-n">${mcqs.length}</div>
+      <div class="stat-l">MCQ</div>
+    </div>
+
+    <div class="stat">
+      <div class="stat-n">${two.length + three.length}</div>
+      <div class="stat-l">Short / Medium</div>
+    </div>
+
+    <div class="stat">
+      <div class="stat-n">${five.length}</div>
+      <div class="stat-l">Long answer</div>
+    </div>
+  `;
+
+  const tabs = [
+    ['all', `All (${total})`]
+  ];
+
+  if (mcqs.length)
+    tabs.push(['mcq', `MCQ (${mcqs.length})`]);
+
+  if (two.length)
+    tabs.push(['2mark', `2-Mark (${two.length})`]);
+
+  if (three.length)
+    tabs.push(['3mark', `3-Mark (${three.length})`]);
+
+  if (five.length)
+    tabs.push(['5mark', `5-Mark (${five.length})`]);
+
+  document.getElementById('filter-tabs').innerHTML =
+    tabs.map(([k, l]) => `
+      <div class="ftab ${k === 'all' ? 'on' : ''}"
+           onclick="filterBy('${k}', this)">
+        ${l}
+      </div>
+    `).join('');
+
+  activeFilter = 'all';
+
+  renderQuestions(d);
+
+  document.getElementById('results-title')
+    .textContent = `Generated Questions (${total})`;
+
+  const sec = document.getElementById('results-section');
+
+  sec.classList.remove('hidden');
+
+  sec.scrollIntoView({
+    behavior: 'smooth'
+  });
 }
 
 /* ---------- FILTER ---------- */
@@ -738,106 +910,158 @@ function renderQuestions(d) {
 
   const out = document.getElementById('questions-out');
 
-  let html = '';
+  out.innerHTML = '';
 
-  function makeSection(title, arr, pill) {
+  const sections = [
+    ['mcq', 'MCQ Questions', d.mcq || []],
+    ['2mark', '2-Mark Questions', d.two_mark || []],
+    ['3mark', '3-Mark Questions', d.three_mark || []],
+    ['5mark', '5-Mark Questions', d.five_mark || []]
+  ];
 
-    if (!arr.length) return '';
+  sections.forEach(([key, title, arr]) => {
 
-    return `
+    if (!arr.length) return;
+
+    if (activeFilter !== 'all' && activeFilter !== key)
+      return;
+
+    let html = `
       <div class="q-section">
+
         <div class="q-section-head">
           <h3>${title}</h3>
           <div class="line"></div>
-          <div class="q-count-badge">${arr.length}</div>
+          <span class="q-count-badge">
+            ${arr.length}
+          </span>
         </div>
-
-        ${arr.map((q, i) => `
-          <div class="q-item">
-            <div class="q-meta">
-              <div class="q-num-badge">Q${i + 1}</div>
-              <div class="mark-pill ${pill}">
-                ${title}
-              </div>
-            </div>
-
-            <div class="q-text">
-              ${typeof q === 'string' ? q : q.question}
-            </div>
-
-            ${q.options ? `
-              <div class="mcq-grid">
-                ${q.options.map((o, idx) => `
-                  <div class="mcq-opt">
-                    <span class="opt-label">
-                      ${String.fromCharCode(65 + idx)}.
-                    </span>
-                    <span>${o}</span>
-                  </div>
-                `).join('')}
-              </div>
-            ` : ''}
-          </div>
-        `).join('')}
-      </div>
     `;
-  }
 
-  if (activeFilter === 'all' || activeFilter === 'mcq') {
-    html += makeSection('MCQ', d.mcq || [], 'pill-mcq');
-  }
+    arr.forEach((q, idx) => {
 
-  if (activeFilter === 'all' || activeFilter === '2mark') {
-    html += makeSection('2 Marks', d.two_mark || [], 'pill-2');
-  }
+      const markClass =
+        key === 'mcq'
+          ? 'pill-mcq'
+          : key === '2mark'
+          ? 'pill-2'
+          : key === '3mark'
+          ? 'pill-3'
+          : 'pill-5';
 
-  if (activeFilter === 'all' || activeFilter === '3mark') {
-    html += makeSection('3 Marks', d.three_mark || [], 'pill-3');
-  }
+      html += `
+        <div class="q-item">
 
-  if (activeFilter === 'all' || activeFilter === '5mark') {
-    html += makeSection('5 Marks', d.five_mark || [], 'pill-5');
-  }
+          <div class="q-meta">
 
-  out.innerHTML = html;
+            <span class="q-num-badge">
+              Q${idx + 1}
+            </span>
+
+            <span class="mark-pill ${markClass}">
+              ${title}
+            </span>
+
+          </div>
+
+          <div class="q-text">
+            ${q.question || q.q || 'No question'}
+          </div>
+      `;
+
+      if (
+        key === 'mcq' &&
+        Array.isArray(q.options)
+      ) {
+
+        html += `<div class="mcq-grid">`;
+
+        q.options.forEach((opt, i) => {
+
+          html += `
+            <div class="mcq-opt">
+
+              <span class="opt-label">
+                ${String.fromCharCode(65 + i)}.
+              </span>
+
+              <span>${opt}</span>
+
+            </div>
+          `;
+        });
+
+        html += `</div>`;
+      }
+
+      html += `</div>`;
+    });
+
+    html += `</div>`;
+
+    out.innerHTML += html;
+  });
 }
 
-/* ---------- DOWNLOAD ---------- */
+/* ---------- DOWNLOAD TXT ---------- */
 function dlTXT() {
 
   if (!generatedData) return;
 
-  let txt = 'Generated Questions\n\n';
+  fetch('/download/txt', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      data: generatedData
+    })
+  })
+  .then(r => r.blob())
+  .then(blob => {
 
-  ['mcq', 'two_mark', 'three_mark', 'five_mark'].forEach(k => {
+    const url = window.URL.createObjectURL(blob);
 
-    const arr = generatedData[k] || [];
+    const a = document.createElement('a');
 
-    arr.forEach((q, i) => {
+    a.href = url;
 
-      txt += `${i + 1}. ${typeof q === 'string' ? q : q.question}\n`;
+    a.download = 'questions.txt';
 
-      if (q.options) {
-        q.options.forEach((o, idx) => {
-          txt += `   ${String.fromCharCode(65 + idx)}. ${o}\n`;
-        });
-      }
+    a.click();
 
-      txt += '\n';
-    });
+    window.URL.revokeObjectURL(url);
   });
-
-  const blob = new Blob([txt], { type: 'text/plain' });
-
-  const a = document.createElement('a');
-
-  a.href = URL.createObjectURL(blob);
-  a.download = 'questions.txt';
-
-  a.click();
 }
 
+/* ---------- DOWNLOAD PDF ---------- */
 function dlPDF() {
-  alert('PDF download connected from backend.');
+
+  if (!generatedData) return;
+
+  fetch('/download/pdf', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      data: generatedData
+    })
+  })
+  .then(r => r.blob())
+  .then(blob => {
+
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+
+    a.href = url;
+
+    a.download = 'questions.pdf';
+
+    a.click();
+
+    window.URL.revokeObjectURL(url);
+  });
 }
 </script>
