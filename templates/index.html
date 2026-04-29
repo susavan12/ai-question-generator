@@ -736,19 +736,134 @@ async function generate() {
 
   try {
 
-    const controller = new AbortController();
+    /* ---------- RENDER COLD START FIX ---------- */
+    // Render free server may sleep.
+    // First request can fail while waking up.
+    // So retry automatically.
 
-    const timeout = setTimeout(() => {
-      controller.abort();
-    }, 120000);
+    let res;
+    let retries = 3;
 
-    const res = await fetch('/generate', {
-      method: 'POST',
-      body: fd,
-      signal: controller.signal
-    });
+    for (let i = 0; i < retries; i++) {
 
-    clearTimeout(timeout);
+      try {
+
+        const controller = new AbortController();
+
+        const timeout = setTimeout(() => {
+          controller.abort();
+        }, 120000);
+
+        res = await fetch('/generate', {
+          method: 'POST',
+          body: fd,
+          signal: controller.signal
+        });
+
+        clearTimeout(timeout);
+
+        // If backend returns HTML page
+        const contentType = res.headers.get("content-type");
+
+        if (!contentType || !contentType.includes("application/json")) {
+
+          const text = await res.text();
+
+          console.log("SERVER RESPONSE:", text);
+
+          // retry after delay
+          if (i < retries - 1) {
+
+            document.getElementById('loader-msg')
+              .textContent =
+                'Waking up AI server... Please wait';
+
+            await new Promise(r => setTimeout(r, 5000));
+
+            continue;
+          }
+
+          throw new Error(
+            "Server restarted. Please try again in a few seconds."
+          );
+        }
+
+        // success -> stop retry loop
+        break;
+
+      } catch (err) {
+
+        if (i < retries - 1) {
+
+          document.getElementById('loader-msg')
+            .textContent =
+              'Reconnecting to AI server...';
+
+          await new Promise(r => setTimeout(r, 5000));
+
+        } else {
+
+          throw err;
+        }
+      }
+    }
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Server error');
+    }
+
+    if (!data.success) {
+      throw new Error(data.error || 'Generation failed');
+    }
+
+    generatedData = data.data || {};
+
+    generatedData.mcq =
+      Array.isArray(generatedData.mcq)
+        ? generatedData.mcq
+        : [];
+
+    generatedData.two_mark =
+      Array.isArray(generatedData.two_mark)
+        ? generatedData.two_mark
+        : [];
+
+    generatedData.three_mark =
+      Array.isArray(generatedData.three_mark)
+        ? generatedData.three_mark
+        : [];
+
+    generatedData.five_mark =
+      Array.isArray(generatedData.five_mark)
+        ? generatedData.five_mark
+        : [];
+
+    stopLoader();
+
+    renderResults(generatedData);
+
+  } catch (err) {
+
+    stopLoader();
+
+    console.error(err);
+
+    if (err.name === 'AbortError') {
+
+      showErr('Request timed out. Try again.');
+
+    } else {
+
+      showErr('⚠ ' + err.message);
+    }
+
+  } finally {
+
+    btn.disabled = false;
+  }
+}
 
     /* ---------- IMPORTANT FIX ---------- */
 
