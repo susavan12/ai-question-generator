@@ -752,7 +752,7 @@ async function generate() {
 
         const timeout = setTimeout(() => {
           controller.abort();
-        }, 120000);
+        }, 90000);
 
         res = await fetch('/generate', {
           method: 'POST',
@@ -778,7 +778,7 @@ async function generate() {
               .textContent =
                 'Waking up AI server... Please wait';
 
-            await new Promise(r => setTimeout(r, 5000));
+            await new Promise(r => setTimeout(r, 7000));
 
             continue;
           }
@@ -799,7 +799,7 @@ async function generate() {
             .textContent =
               'Reconnecting to AI server...';
 
-          await new Promise(r => setTimeout(r, 5000));
+          await new Promise(r => setTimeout(r, 7000));
 
         } else {
 
