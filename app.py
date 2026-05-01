@@ -62,7 +62,7 @@ def extract_text_from_pdf(file_stream):
             text = " ".join(text.split())
 
             # Limit AI input size for speed
-            text = text[:15000]
+            text = text[:9000]
 
     except Exception as e:
 
