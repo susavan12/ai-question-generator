@@ -73,6 +73,9 @@ def extract_text_from_pdf(file_stream):
 # ---------------- AI QUESTION GENERATION ----------------
 def generate_questions(text, types, count):
 
+    # Reduce AI input size for speed
+    short_text = text[:9000]
+
     type_prompt = []
 
     if "mcq" in types:
@@ -87,54 +90,63 @@ def generate_questions(text, types, count):
     if "5mark" in types:
         type_prompt.append(f"{count} long 5-mark questions")
 
+    # ---------------- DYNAMIC JSON FORMAT ----------------
+    json_format = {}
+
+    if "mcq" in types:
+        json_format["mcq"] = [
+            {
+                "question": "Sample MCQ question",
+                "options": [
+                    "Option A",
+                    "Option B",
+                    "Option C",
+                    "Option D"
+                ]
+            }
+        ]
+
+    if "2mark" in types:
+        json_format["two_mark"] = [
+            {
+                "question": "Sample 2 mark question"
+            }
+        ]
+
+    if "3mark" in types:
+        json_format["three_mark"] = [
+            {
+                "question": "Sample 3 mark question"
+            }
+        ]
+
+    if "5mark" in types:
+        json_format["five_mark"] = [
+            {
+                "question": "Sample 5 mark question"
+            }
+        ]
+
+    # ---------------- PROMPT ----------------
     prompt = f"""
 Generate exam questions from the study material.
 
-Generate:
+Generate ONLY these question types:
 {chr(10).join(type_prompt)}
 
-Rules:
+IMPORTANT RULES:
 - Return ONLY valid JSON
 - No explanation
 - No markdown
+- No extra categories
 - Keep questions concise and clear
 
-JSON FORMAT:
+Return JSON in this EXACT format:
 
-{{
-  "mcq": [
-    {{
-      "question": "Sample question",
-      "options": [
-        "Option A",
-        "Option B",
-        "Option C",
-        "Option D"
-      ]
-    }}
-  ],
-
-  "two_mark": [
-    {{
-      "question": "Sample 2 mark question"
-    }}
-  ],
-
-  "three_mark": [
-    {{
-      "question": "Sample 3 mark question"
-    }}
-  ],
-
-  "five_mark": [
-    {{
-      "question": "Sample 5 mark question"
-    }}
-  ]
-}}
+{json.dumps(json_format, indent=2)}
 
 STUDY MATERIAL:
-{text}
+{short_text}
 """
 
     try:
@@ -174,10 +186,24 @@ STUDY MATERIAL:
 
         parsed = json.loads(raw)
 
+        # Safety defaults
         parsed.setdefault("mcq", [])
         parsed.setdefault("two_mark", [])
         parsed.setdefault("three_mark", [])
         parsed.setdefault("five_mark", [])
+
+        # Remove unselected categories
+        if "mcq" not in types:
+            parsed["mcq"] = []
+
+        if "2mark" not in types:
+            parsed["two_mark"] = []
+
+        if "3mark" not in types:
+            parsed["three_mark"] = []
+
+        if "5mark" not in types:
+            parsed["five_mark"] = []
 
         return parsed
 
