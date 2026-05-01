@@ -3,6 +3,8 @@ import os
 import io
 import pdfplumber
 
+from concurrent.futures import ThreadPoolExecutor
+
 from flask import Flask, render_template, request, jsonify, send_file
 from groq import Groq
 
@@ -25,6 +27,13 @@ print("GROQ KEY LOADED:", bool(GROQ_API_KEY))
 client = Groq(api_key=GROQ_API_KEY)
 
 # ---------------- PDF TEXT EXTRACTION ----------------
+def extract_single_page(page):
+
+    try:
+        return page.extract_text() or ""
+    except:
+        return ""
+
 def extract_text_from_pdf(file_stream):
 
     text = ""
@@ -35,26 +44,34 @@ def extract_text_from_pdf(file_stream):
 
         with pdfplumber.open(file_stream) as pdf:
 
-            max_pages = min(len(pdf.pages), 20)
+            # Increased page limit
+            max_pages = min(len(pdf.pages), 40)
 
-            for i in range(max_pages):
+            pages = pdf.pages[:max_pages]
 
-                page = pdf.pages[i]
+            # Parallel extraction for speed
+            with ThreadPoolExecutor() as executor:
 
-                page_text = page.extract_text()
+                extracted_pages = list(
+                    executor.map(extract_single_page, pages)
+                )
 
-                if page_text:
-                    text += page_text + "\n"
+            text = "\n".join(extracted_pages)
+
+            # Remove extra spaces/newlines
+            text = " ".join(text.split())
+
+            # Limit AI input size for speed
+            text = text[:15000]
 
     except Exception as e:
+
         print("❌ PDF EXTRACTION ERROR:", str(e))
 
     return text.strip()
 
 # ---------------- AI QUESTION GENERATION ----------------
 def generate_questions(text, types, count):
-
-    short_text = text[:12000]
 
     type_prompt = []
 
@@ -71,14 +88,18 @@ def generate_questions(text, types, count):
         type_prompt.append(f"{count} long 5-mark questions")
 
     prompt = f"""
-Generate exam questions from the provided study material.
+Generate exam questions from the study material.
 
 Generate:
 {chr(10).join(type_prompt)}
 
-Return ONLY valid JSON.
+Rules:
+- Return ONLY valid JSON
+- No explanation
+- No markdown
+- Keep questions concise and clear
 
-FORMAT:
+JSON FORMAT:
 
 {{
   "mcq": [
@@ -113,15 +134,19 @@ FORMAT:
 }}
 
 STUDY MATERIAL:
-{short_text}
+{text}
 """
 
     try:
 
         response = client.chat.completions.create(
+
             model="llama-3.1-8b-instant",
+
             temperature=0.3,
-            max_tokens=3000,
+
+            max_tokens=2500,
+
             messages=[
                 {
                     "role": "user",
@@ -140,7 +165,7 @@ STUDY MATERIAL:
         raw = raw.replace("```", "")
         raw = raw.strip()
 
-        # Extract JSON safely
+        # Safe JSON extraction
         start = raw.find("{")
         end = raw.rfind("}")
 
@@ -149,7 +174,6 @@ STUDY MATERIAL:
 
         parsed = json.loads(raw)
 
-        # Safety defaults
         parsed.setdefault("mcq", [])
         parsed.setdefault("two_mark", [])
         parsed.setdefault("three_mark", [])
@@ -179,7 +203,6 @@ def generate():
 
     try:
 
-        # ---------------- CHECK PDF ----------------
         if "pdf" not in request.files:
             return jsonify({
                 "success": False,
@@ -194,8 +217,8 @@ def generate():
                 "error": "No file selected"
             }), 400
 
-        # ---------------- FORM DATA ----------------
         types = request.form.getlist("types")
+
         count = int(request.form.get("count", 5))
 
         if not types:
@@ -204,7 +227,6 @@ def generate():
                 "error": "No question types selected"
             }), 400
 
-        # ---------------- READ PDF ----------------
         pdf_bytes = pdf_file.read()
 
         if not pdf_bytes:
@@ -225,7 +247,6 @@ def generate():
                 "error": "No readable text found in PDF"
             }), 400
 
-        # ---------------- GENERATE ----------------
         questions = generate_questions(text, types, count)
 
         return jsonify({
@@ -306,9 +327,7 @@ def download_pdf():
             if not questions:
                 continue
 
-            story.append(
-                Spacer(1, 12)
-            )
+            story.append(Spacer(1, 12))
 
             story.append(
                 Paragraph(title, styles["Heading2"])
@@ -325,7 +344,6 @@ def download_pdf():
                     )
                 )
 
-                # MCQ options
                 if "options" in q:
 
                     options = q["options"]
@@ -341,9 +359,7 @@ def download_pdf():
                             )
                         )
 
-                story.append(
-                    Spacer(1, 10)
-                )
+                story.append(Spacer(1, 10))
 
         doc.build(story)
 
