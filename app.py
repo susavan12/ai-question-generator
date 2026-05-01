@@ -157,7 +157,7 @@ STUDY MATERIAL:
 
             temperature=0.3,
 
-            max_tokens=1900,
+            max_tokens=2300,
 
             messages=[
                 {
