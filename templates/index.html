@@ -736,13 +736,10 @@ async function generate() {
 
   try {
 
-    /* ---------- RENDER COLD START FIX ---------- */
-    // Render free server may sleep.
-    // First request can fail while waking up.
-    // So retry automatically.
-
     let res;
-    let retries = 3;
+
+    // Increased retry count
+    let retries = 5;
 
     for (let i = 0; i < retries; i++) {
 
@@ -750,6 +747,7 @@ async function generate() {
 
         const controller = new AbortController();
 
+        // Better timeout for mobile + Render
         const timeout = setTimeout(() => {
           controller.abort();
         }, 90000);
@@ -762,44 +760,57 @@ async function generate() {
 
         clearTimeout(timeout);
 
-        // If backend returns HTML page
-        const contentType = res.headers.get("content-type");
+        // Check server response type
+        const contentType =
+          res.headers.get("content-type");
 
-        if (!contentType || !contentType.includes("application/json")) {
+        // Render sometimes returns HTML restart page
+        if (
+          !contentType ||
+          !contentType.includes("application/json")
+        ) {
 
           const text = await res.text();
 
           console.log("SERVER RESPONSE:", text);
 
-          // retry after delay
+          // Retry if attempts remain
           if (i < retries - 1) {
 
             document.getElementById('loader-msg')
               .textContent =
                 'Waking up AI server... Please wait';
 
-            await new Promise(r => setTimeout(r, 7000));
+            // Wait before retry
+            await new Promise(r =>
+              setTimeout(r, 7000)
+            );
 
             continue;
           }
 
           throw new Error(
-            "Server restarted. Please try again in a few seconds."
+            "Server restarted. Please try again."
           );
         }
 
-        // success -> stop retry loop
+        // Success
         break;
 
       } catch (err) {
 
+        console.error("Retry Error:", err);
+
+        // Retry remaining attempts
         if (i < retries - 1) {
 
           document.getElementById('loader-msg')
             .textContent =
               'Reconnecting to AI server...';
 
-          await new Promise(r => setTimeout(r, 7000));
+          await new Promise(r =>
+            setTimeout(r, 7000)
+          );
 
         } else {
 
@@ -808,18 +819,28 @@ async function generate() {
       }
     }
 
+    // Extra safety
+    if (!res) {
+      throw new Error("No server response");
+    }
+
     const data = await res.json();
 
     if (!res.ok) {
-      throw new Error(data.error || 'Server error');
+      throw new Error(
+        data.error || 'Server error'
+      );
     }
 
     if (!data.success) {
-      throw new Error(data.error || 'Generation failed');
+      throw new Error(
+        data.error || 'Generation failed'
+      );
     }
 
     generatedData = data.data || {};
 
+    // Safety defaults
     generatedData.mcq =
       Array.isArray(generatedData.mcq)
         ? generatedData.mcq
@@ -852,7 +873,9 @@ async function generate() {
 
     if (err.name === 'AbortError') {
 
-      showErr('Request timed out. Try again.');
+      showErr(
+        'Server is taking too long. Please try again.'
+      );
 
     } else {
 

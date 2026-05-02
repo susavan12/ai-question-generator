@@ -45,7 +45,7 @@ def extract_text_from_pdf(file_stream):
         with pdfplumber.open(file_stream) as pdf:
 
             # Increased page limit
-            max_pages = min(len(pdf.pages), 40)
+            max_pages = min(len(pdf.pages), 30)
 
             pages = pdf.pages[:max_pages]
 
@@ -157,7 +157,7 @@ STUDY MATERIAL:
 
             temperature=0.3,
 
-            max_tokens=2300,
+            max_tokens=2000,
 
             messages=[
                 {
