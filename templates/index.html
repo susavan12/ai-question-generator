@@ -739,7 +739,7 @@ async function generate() {
     let res;
 
     // Increased retry count
-    let retries = 5;
+    let retries = 4;
 
     for (let i = 0; i < retries; i++) {
 
@@ -750,7 +750,7 @@ async function generate() {
         // Better timeout for mobile + Render
         const timeout = setTimeout(() => {
           controller.abort();
-        }, 90000);
+        }, 75000);
 
         res = await fetch('/generate', {
           method: 'POST',
@@ -783,7 +783,7 @@ async function generate() {
 
             // Wait before retry
             await new Promise(r =>
-              setTimeout(r, 7000)
+              setTimeout(r, 4000)
             );
 
             continue;
