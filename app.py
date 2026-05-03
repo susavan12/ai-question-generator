@@ -72,6 +72,9 @@ def extract_text_from_pdf(file_stream):
 
 # ---------------- AI QUESTION GENERATION ----------------
 def generate_questions(text, types, count):
+    # Auto reduce count if all question types selected
+    if len(types) >= 4 and count > 5:
+        count = 5
 
     # Full extracted text
     short_text = text
@@ -165,7 +168,7 @@ STUDY MATERIAL:
 
                     temperature=0.2,
 
-                    max_tokens=1600,
+                    max_tokens=2200,
 
                     messages=[
                         {
@@ -188,6 +191,8 @@ STUDY MATERIAL:
                     raise retry_error
 
         raw = response.choices[0].message.content.strip()
+        if not raw:
+         raise Exception("Empty AI response")
 
         print("RAW AI RESPONSE:")
         print(raw)
