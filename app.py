@@ -45,7 +45,7 @@ def extract_text_from_pdf(file_stream):
         with pdfplumber.open(file_stream) as pdf:
 
             # Increased page limit
-            max_pages = min(len(pdf.pages), 30)
+            max_pages = min(len(pdf.pages), 20)
 
             pages = pdf.pages[:max_pages]
 
@@ -62,7 +62,7 @@ def extract_text_from_pdf(file_stream):
             text = " ".join(text.split())
 
             # Limit AI input size for speed
-            text = text[:7000]
+            text = text[:6000]
 
     except Exception as e:
 
@@ -74,7 +74,7 @@ def extract_text_from_pdf(file_stream):
 def generate_questions(text, types, count):
 
     # Reduce AI input size for speed
-    short_text = text[:7000]
+    short_text = text[:6000]
 
     type_prompt = []
 
@@ -157,7 +157,7 @@ STUDY MATERIAL:
 
             temperature=0.3,
 
-            max_tokens=1500,
+            max_tokens=1600,
 
             messages=[
                 {
