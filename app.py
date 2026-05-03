@@ -73,7 +73,7 @@ def extract_text_from_pdf(file_stream):
 # ---------------- AI QUESTION GENERATION ----------------
 def generate_questions(text, types, count):
 
-    # Reduce AI input size for speed
+    # Full extracted text
     short_text = text
 
     type_prompt = []
@@ -140,6 +140,7 @@ IMPORTANT RULES:
 - No markdown
 - No extra categories
 - Keep questions concise and clear
+- Generate all requested questions properly
 
 Return JSON in this EXACT format:
 
@@ -151,48 +152,82 @@ STUDY MATERIAL:
 
     try:
 
-        response = client.chat.completions.create(
+        # ---------------- AI RETRY SYSTEM ----------------
+        response = None
 
-            model="llama-3.1-8b-instant",
+        for attempt in range(3):
 
-            temperature=0.3,
+            try:
 
-            max_tokens=1700,
+                response = client.chat.completions.create(
 
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
-        )
+                    model="llama-3.1-8b-instant",
+
+                    temperature=0.2,
+
+                    max_tokens=1600,
+
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ]
+                )
+
+                break
+
+            except Exception as retry_error:
+
+                print(
+                    f"AI RETRY {attempt + 1} FAILED:",
+                    str(retry_error)
+                )
+
+                if attempt == 2:
+                    raise retry_error
 
         raw = response.choices[0].message.content.strip()
 
         print("RAW AI RESPONSE:")
         print(raw)
 
-        # Remove markdown formatting
+        # ---------------- CLEAN RESPONSE ----------------
         raw = raw.replace("```json", "")
         raw = raw.replace("```", "")
         raw = raw.strip()
 
-        # Safe JSON extraction
+        # ---------------- SAFE JSON EXTRACTION ----------------
         start = raw.find("{")
         end = raw.rfind("}")
 
         if start != -1 and end != -1:
             raw = raw[start:end + 1]
 
-        parsed = json.loads(raw)
+        # ---------------- SAFE JSON PARSE ----------------
+        try:
 
-        # Safety defaults
+            parsed = json.loads(raw)
+
+        except Exception as json_error:
+
+            print("❌ JSON PARSE ERROR:", str(json_error))
+            print("RAW RESPONSE:", raw)
+
+            return {
+                "mcq": [],
+                "two_mark": [],
+                "three_mark": [],
+                "five_mark": []
+            }
+
+        # ---------------- SAFETY DEFAULTS ----------------
         parsed.setdefault("mcq", [])
         parsed.setdefault("two_mark", [])
         parsed.setdefault("three_mark", [])
         parsed.setdefault("five_mark", [])
 
-        # Remove unselected categories
+        # ---------------- REMOVE UNSELECTED TYPES ----------------
         if "mcq" not in types:
             parsed["mcq"] = []
 
@@ -222,7 +257,6 @@ STUDY MATERIAL:
 @app.route("/")
 def index():
     return render_template("index.html")
-
 # ---------------- GENERATE QUESTIONS ----------------
 @app.route("/generate", methods=["POST"])
 def generate():
