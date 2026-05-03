@@ -62,7 +62,7 @@ def extract_text_from_pdf(file_stream):
             text = " ".join(text.split())
 
             # Limit AI input size for speed
-            text = text[:7000]
+            text = text[:9000]
 
     except Exception as e:
 
@@ -72,9 +72,7 @@ def extract_text_from_pdf(file_stream):
 
 # ---------------- AI QUESTION GENERATION ----------------
 def generate_questions(text, types, count):
-    # Auto reduce count if all question types selected
-    if len(types) >= 4 and count > 5:
-        count = 5
+   
 
     # Full extracted text
     short_text = text
@@ -168,7 +166,7 @@ STUDY MATERIAL:
 
                     temperature=0.2,
 
-                    max_tokens=2200,
+                    max_tokens=3200,
 
                     messages=[
                         {
