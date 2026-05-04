@@ -260,6 +260,10 @@ STUDY MATERIAL:
 @app.route("/")
 def index():
     return render_template("index.html")
+# ---------------- RENDER KEEP ALIVE ----------------
+@app.route("/ping")
+def ping():
+    return "Server Awake"
 # ---------------- GENERATE QUESTIONS ----------------
 @app.route("/generate", methods=["POST"])
 def generate():
